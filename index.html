@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>GenieWheels</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f1923;
+      color: white;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      height: 100dvh;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    /* ── SETUP SCREEN ── */
+    #setup {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      gap: 26px;
+      padding: 24px;
+      background: linear-gradient(160deg, #0f1923 0%, #1a2f4a 50%, #0f2618 100%);
+    }
+
+    .title {
+      font-size: clamp(2rem, 8vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: -2px;
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .section { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+    .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #475569;
+    }
+
+    .name-input {
+      background: rgba(255,255,255,0.07);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      color: white;
+      font-size: 1rem;
+      font-family: inherit;
+      padding: 10px 16px;
+      text-align: center;
+      width: 200px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .name-input:focus { border-color: rgba(255,210,0,0.5); }
+    .name-input::placeholder { color: #334155; }
+
+    .car-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    .car-card {
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 12px 10px 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      text-align: center;
+      user-select: none;
+    }
+    .car-card:hover { border-color: rgba(255,210,0,0.35); background: rgba(255,210,0,0.05); }
+    .car-card.active {
+      border-color: #ffd200;
+      background: rgba(255,210,0,0.08);
+      box-shadow: 0 0 22px rgba(255,210,0,0.12);
+    }
+    .car-card canvas { display: block; }
+    .car-name { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px; margin-top: 6px; color: #64748b; }
+    .car-card.active .car-name { color: #ffd200; }
+
+    .color-grid {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 300px;
+    }
+
+    .swatch {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 3px solid transparent;
+      transition: transform 0.15s, border-color 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+    .swatch:hover { transform: scale(1.15); }
+    .swatch.active { border-color: white; transform: scale(1.2); box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+
+    .start-btn {
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      color: #0f1923;
+      border: none;
+      padding: 14px 48px;
+      border-radius: 50px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 24px rgba(247,151,30,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .start-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 28px rgba(247,151,30,0.5); }
+    .start-btn:active { transform: translateY(1px); }
+
+    /* ── GAME SCREEN ── */
+    #game { display: none; position: relative; width: 100%; height: 100dvh; }
+    #canvas { display: block; width: 100%; height: 100%; }
+
+    #hud { position: absolute; inset: 0; pointer-events: none; }
+
+    /* Room badge */
+    #room-badge {
+      position: absolute;
+      top: 14px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(8px);
+      pointer-events: all;
+      white-space: nowrap;
+    }
+    #room-code { color: #ffd200; font-family: monospace; font-size: 0.85rem; letter-spacing: 1px; }
+    .copy-btn {
+      background: rgba(255,255,255,0.1);
+      border: none; color: white;
+      padding: 3px 8px; border-radius: 6px;
+      font-size: 0.68rem; cursor: pointer; font-family: inherit;
+      transition: background 0.1s;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* Player count */
+    #player-count {
+      position: absolute;
+      top: 14px; left: 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 7px 12px;
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.55);
+      backdrop-filter: blur(6px);
+    }
+
+    /* Speed HUD */
+    #speed-hud {
+      position: absolute;
+      bottom: 110px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+    }
+    .speed-pips { display: flex; gap: 6px; }
+    .pip {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: 1.5px solid rgba(255,255,255,0.15);
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .pip.park { background: #94a3b8; border-color: #94a3b8; }
+    .pip.slow { background: #f59e0b; border-color: #f59e0b; box-shadow: 0 0 7px #f59e0b; }
+    .pip.fast { background: #22c55e; border-color: #22c55e; box-shadow: 0 0 7px #22c55e; }
+    #speed-label {
+      font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 3px; color: rgba(255,255,255,0.4);
+    }
+
+    /* Controls */
+    #controls {
+      position: absolute;
+      bottom: 16px; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 20px;
+      pointer-events: none;
+    }
+    .ctrl-group { display: flex; gap: 10px; pointer-events: all; }
+
+    .ctrl-btn {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 700; line-height: 1;
+      user-select: none; -webkit-user-select: none;
+      touch-action: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      transition: transform 0.08s;
+    }
+    .ctrl-btn:active, .ctrl-btn.pressed { transform: scale(0.88); }
+    .btn-sub { font-size: 0.48rem; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; margin-top: 2px; }
+    .btn-turn {
+      background: rgba(20,30,50,0.75);
+      color: white;
+      border: 1.5px solid rgba(255,255,255,0.15);
+      backdrop-filter: blur(6px);
+    }
+    .btn-gas  { background: linear-gradient(135deg, #059669, #34d399); color: #022c22; }
+    .btn-brake { background: linear-gradient(135deg, #b91c1c, #f87171); color: white; }
+
+    /* Menu button */
+    #menu-btn {
+      position: absolute; top: 14px; right: 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.6);
+      padding: 7px 14px; border-radius: 20px;
+      font-size: 0.72rem; font-family: inherit;
+      cursor: pointer; pointer-events: all;
+      backdrop-filter: blur(6px);
+    }
+
+    /* Toast */
+    #toast {
+      position: absolute;
+      top: 58px; left: 50%;
+      transform: translateX(-50%) translateY(-6px);
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 8px 16px;
+      font-size: 0.8rem;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+      backdrop-filter: blur(6px);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- ── SETUP SCREEN ── -->
+<div id="setup">
+  <div class="title">GenieWheels</div>
+
+  <div class="section">
+    <div class="label">Your name</div>
+    <input class="name-input" id="name-input" type="text" placeholder="Enter your name" maxlength="16" autocomplete="off">
+  </div>
+
+  <div class="section">
+    <div class="label">Choose your ride</div>
+    <div class="car-grid" id="car-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="label">Choose your color</div>
+    <div class="color-grid" id="color-grid"></div>
+  </div>
+
+  <button class="start-btn" onclick="startGame()">Start Driving →</button>
+</div>
+
+<!-- ── GAME SCREEN ── -->
+<div id="game">
+  <canvas id="canvas"></canvas>
+  <div id="hud">
+    <div id="room-badge">
+      <span style="color:#94a3b8">Room:</span>
+      <span id="room-code">------</span>
+      <button class="copy-btn" onclick="copyLink()">Copy Link</button>
+    </div>
+
+    <div id="player-count">👤 1</div>
+
+    <div id="speed-hud">
+      <div class="speed-pips">
+        <div class="pip" id="pip1"></div>
+        <div class="pip" id="pip2"></div>
+        <div class="pip" id="pip3"></div>
+      </div>
+      <div id="speed-label">PARK</div>
+    </div>
+
+    <div id="controls">
+      <div class="ctrl-group">
+        <button class="ctrl-btn btn-turn" id="btn-left">←</button>
+        <button class="ctrl-btn btn-turn" id="btn-right">→</button>
+      </div>
+      <div class="ctrl-group">
+        <button class="ctrl-btn btn-brake" onclick="brake()">
+          🛑<div class="btn-sub">Brake</div>
+        </button>
+        <button class="ctrl-btn btn-gas" onclick="gas()">
+          ⚡<div class="btn-sub">Gas</div>
+        </button>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <button id="menu-btn" onclick="backToMenu()">≡ Menu</button>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────
+const PARTYKIT_HOST  = 'geniewheels.pastaluke.partykit.dev';
+const MAP_SCALE      = 1.8;
+const SPEEDS         = { park: 0, slow: 90, fast: 260 }; // px/sec
+const TURN_RATE      = 130 * Math.PI / 180;              // rad/sec
+const SEND_INTERVAL  = 50;                                // ms
+
+// ── CAR + COLOR DEFINITIONS ──────────────────────────────────
+const CAR_TYPES = [
+  { id: 'classic', label: 'Classic' },
+  { id: 'muscle',  label: 'Muscle'  },
+  { id: 'suv',     label: 'SUV'     },
+  { id: 'mini',    label: 'Mini'    },
+];
+
+const COLORS = [
+  { name: 'Crimson', hex: '#dc2626' },
+  { name: 'Ocean',   hex: '#2563eb' },
+  { name: 'Forest',  hex: '#16a34a' },
+  { name: 'Amber',   hex: '#d97706' },
+  { name: 'Blaze',   hex: '#ea580c' },
+  { name: 'Violet',  hex: '#7c3aed' },
+  { name: 'Rose',    hex: '#db2777' },
+  { name: 'Arctic',  hex: '#e2e8f0' },
+  { name: 'Teal',    hex: '#0d9488' },
+  { name: 'Slate',   hex: '#334155' },
+];
+
+// ── STATE ────────────────────────────────────────────────────
+let selectedCar   = 'classic';
+let selectedColor = COLORS[0].hex;
+let playerName    = 'Driver';
+
+let carX = 0, carY = 0, carAngle = 0;
+let speedState = 'park';
+let keys = {};
+
+let myId          = null;
+let roomCode      = '';
+let socket        = null;
+let remotePlayers = {};
+
+let mapImg  = null;
+let mapW    = 0, mapH = 0;
+let lastTime     = null;
+let lastSendTime = 0;
+let animFrameId  = null;
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+// ── COLOR HELPERS ────────────────────────────────────────────
+function adjustColor(hex, amt) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  const c = v => Math.max(0, Math.min(255, v + amt));
+  return `rgb(${c(r)},${c(g)},${c(b)})`;
+}
+const lighten = (hex, n) => adjustColor(hex,  n);
+const darken  = (hex, n) => adjustColor(hex, -n);
+
+// ── CAR DRAWING ──────────────────────────────────────────────
+// All cars drawn centered at (0,0), facing north (up).
+
+function drawWheels(ctx, slots) {
+  for (const s of slots) {
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.roundRect(s.x, s.y, s.w, s.h, 2);
+    ctx.fill();
+    ctx.fillStyle = '#555';
+    ctx.beginPath();
+    ctx.arc(s.x + s.w / 2, s.y + s.h / 2, s.w * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawClassic(ctx, color) {
+  const bw = 13, bh = 23;
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 8; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(-bw, -bh, bw*2, bh*2, 5); ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle = lighten(color, 28);
+  ctx.beginPath(); ctx.roundRect(-bw+1, -bh, bw*2-2, 10, [4,4,1,1]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 20);
+  ctx.beginPath(); ctx.roundRect(-bw+1, bh-10, bw*2-2, 9, [1,1,4,4]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 22);
+  ctx.beginPath(); ctx.roundRect(-bw+3, -bh+11, bw*2-6, 20, 3); ctx.fill();
+
+  ctx.fillStyle = 'rgba(150,210,245,0.88)';
+  ctx.beginPath(); ctx.roundRect(-bw+5, -bh+12, bw*2-10, 8, 2); ctx.fill();
+  ctx.fillStyle = 'rgba(150,210,245,0.65)';
+  ctx.beginPath(); ctx.roundRect(-bw+5, -bh+22, bw*2-10, 7, 2); ctx.fill();
+
+  ctx.fillStyle = '#fffde8';
+  ctx.fillRect(-bw+1, -bh+1, 5, 3); ctx.fillRect(bw-6, -bh+1, 5, 3);
+  ctx.fillStyle = '#ff2222';
+  ctx.fillRect(-bw+1, bh-4, 5, 3);  ctx.fillRect(bw-6, bh-4, 5, 3);
+
+  drawWheels(ctx, [
+    { x: -bw-5, y: -bh+3,  w: 6, h: 10 },
+    { x:  bw-1, y: -bh+3,  w: 6, h: 10 },
+    { x: -bw-5, y:  bh-13, w: 6, h: 10 },
+    { x:  bw-1, y:  bh-13, w: 6, h: 10 },
+  ]);
+}
+
+function drawMuscle(ctx, color) {
+  const bw = 16, bh = 26;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 10; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(-bw, -bh, bw*2, bh*2, 4); ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle = lighten(color, 32);
+  ctx.beginPath(); ctx.roundRect(-bw+1, -bh, bw*2-2, 15, [4,4,1,1]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 30);
+  ctx.beginPath(); ctx.roundRect(-5, -bh+2, 10, 10, 2); ctx.fill();
+
+  ctx.fillStyle = darken(color, 18);
+  ctx.beginPath(); ctx.roundRect(-bw+1, bh-12, bw*2-2, 11, [1,1,4,4]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 20);
+  ctx.beginPath(); ctx.roundRect(-bw+4, -bh+16, bw*2-8, 17, 3); ctx.fill();
+
+  ctx.fillStyle = 'rgba(150,210,245,0.88)';
+  ctx.beginPath(); ctx.roundRect(-bw+6, -bh+17, bw*2-12, 8, 2); ctx.fill();
+  ctx.fillStyle = 'rgba(150,210,245,0.6)';
+  ctx.beginPath(); ctx.roundRect(-bw+6, -bh+27, bw*2-12, 5, 2); ctx.fill();
+
+  ctx.fillStyle = '#fffde8';
+  ctx.fillRect(-bw+1, -bh+1, 6, 3); ctx.fillRect(bw-7, -bh+1, 6, 3);
+  ctx.fillStyle = '#ff2222';
+  ctx.fillRect(-bw+1, bh-4, 6, 3);  ctx.fillRect(bw-7, bh-4, 6, 3);
+
+  drawWheels(ctx, [
+    { x: -bw-6, y: -bh+3,  w: 7, h: 13 },
+    { x:  bw-1, y: -bh+3,  w: 7, h: 13 },
+    { x: -bw-6, y:  bh-16, w: 7, h: 13 },
+    { x:  bw-1, y:  bh-16, w: 7, h: 13 },
+  ]);
+}
+
+function drawSUV(ctx, color) {
+  const bw = 15, bh = 22;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 10; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(-bw, -bh, bw*2, bh*2, 5); ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle = lighten(color, 22);
+  ctx.beginPath(); ctx.roundRect(-bw+1, -bh, bw*2-2, 8, [5,5,1,1]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 15);
+  ctx.beginPath(); ctx.roundRect(-bw+2, -bh+9, bw*2-4, 26, 3); ctx.fill();
+
+  ctx.fillStyle = 'rgba(150,210,245,0.88)';
+  ctx.beginPath(); ctx.roundRect(-bw+4, -bh+10, bw*2-8, 11, 2); ctx.fill();
+  ctx.fillStyle = 'rgba(150,210,245,0.55)';
+  ctx.beginPath(); ctx.roundRect(-bw+4, -bh+23, bw*2-8, 9, 2); ctx.fill();
+
+  ctx.strokeStyle = darken(color, 35);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-bw+5, -bh+11, bw*2-10, 9);
+
+  ctx.fillStyle = '#fffde8';
+  ctx.fillRect(-bw+1, -bh+1, 6, 4); ctx.fillRect(bw-7, -bh+1, 6, 4);
+  ctx.fillStyle = '#ff2222';
+  ctx.fillRect(-bw+1, bh-5, 6, 4);  ctx.fillRect(bw-7, bh-5, 6, 4);
+
+  drawWheels(ctx, [
+    { x: -bw-6, y: -bh+2,  w: 7, h: 12 },
+    { x:  bw-1, y: -bh+2,  w: 7, h: 12 },
+    { x: -bw-6, y:  bh-14, w: 7, h: 12 },
+    { x:  bw-1, y:  bh-14, w: 7, h: 12 },
+  ]);
+}
+
+function drawMini(ctx, color) {
+  const bw = 11, bh = 17;
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 7; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 3;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(-bw, -bh, bw*2, bh*2, 7); ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle = lighten(color, 25);
+  ctx.beginPath(); ctx.roundRect(-bw+1, -bh, bw*2-2, 6, [6,6,1,1]); ctx.fill();
+
+  ctx.fillStyle = darken(color, 15);
+  ctx.beginPath(); ctx.roundRect(-bw+2, -bh+7, bw*2-4, 18, 4); ctx.fill();
+
+  ctx.fillStyle = 'rgba(150,210,245,0.9)';
+  ctx.beginPath(); ctx.roundRect(-bw+4, -bh+8, bw*2-8, 8, 2); ctx.fill();
+  ctx.fillStyle = 'rgba(150,210,245,0.65)';
+  ctx.beginPath(); ctx.roundRect(-bw+4, -bh+18, bw*2-8, 5, 2); ctx.fill();
+
+  ctx.fillStyle = '#fffde8';
+  ctx.beginPath(); ctx.arc(-bw+3, -bh+3, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( bw-3, -bh+3, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ff2222';
+  ctx.beginPath(); ctx.arc(-bw+3, bh-3, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( bw-3, bh-3, 2.5, 0, Math.PI*2); ctx.fill();
+
+  drawWheels(ctx, [
+    { x: -bw-4, y: -bh+2,  w: 5, h: 8 },
+    { x:  bw-1, y: -bh+2,  w: 5, h: 8 },
+    { x: -bw-4, y:  bh-10, w: 5, h: 8 },
+    { x:  bw-1, y:  bh-10, w: 5, h: 8 },
+  ]);
+}
+
+function drawCar(ctx, type, color) {
+  ctx.save();
+  switch (type) {
+    case 'muscle': drawMuscle(ctx, color); break;
+    case 'suv':    drawSUV(ctx, color);    break;
+    case 'mini':   drawMini(ctx, color);   break;
+    default:       drawClassic(ctx, color);
+  }
+  ctx.restore();
+}
+
+function drawNameLabel(ctx, name) {
+  if (!name) return;
+  ctx.save();
+  ctx.font = '700 11px system-ui, sans-serif';
+  const tw  = ctx.measureText(name).width;
+  const pad = 6, h = 16;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.beginPath(); ctx.roundRect(-tw/2 - pad, -46, tw + pad*2, h, 4); ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(name, 0, -46 + h/2);
+  ctx.restore();
+}
+
+// ── SETUP SCREEN ─────────────────────────────────────────────
+function buildSetupScreen() {
+  const carGrid = document.getElementById('car-grid');
+  for (const car of CAR_TYPES) {
+    const card = document.createElement('div');
+    card.className = 'car-card' + (car.id === selectedCar ? ' active' : '');
+    card.dataset.id = car.id;
+
+    const c = document.createElement('canvas');
+    c.width = 60; c.height = 90;
+    const cx = c.getContext('2d');
+    cx.translate(30, 45);
+    cx.scale(1.6, 1.6);
+    drawCar(cx, car.id, selectedColor);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'car-name';
+    lbl.textContent = car.label;
+
+    card.appendChild(c);
+    card.appendChild(lbl);
+    card.addEventListener('click', () => selectCar(car.id));
+    carGrid.appendChild(card);
+  }
+
+  const colorGrid = document.getElementById('color-grid');
+  for (const col of COLORS) {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (col.hex === selectedColor ? ' active' : '');
+    sw.style.background = col.hex;
+    sw.title = col.name;
+    sw.dataset.hex = col.hex;
+    sw.addEventListener('click', () => selectColor(col.hex));
+    colorGrid.appendChild(sw);
+  }
+}
+
+function selectCar(id) {
+  selectedCar = id;
+  document.querySelectorAll('.car-card').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === id)
+  );
+  redrawPreviews();
+}
+
+function selectColor(hex) {
+  selectedColor = hex;
+  document.querySelectorAll('.swatch').forEach(el =>
+    el.classList.toggle('active', el.dataset.hex === hex)
+  );
+  redrawPreviews();
+}
+
+function redrawPreviews() {
+  document.querySelectorAll('.car-card').forEach(card => {
+    const c  = card.querySelector('canvas');
+    const cx = c.getContext('2d');
+    cx.clearRect(0, 0, c.width, c.height);
+    cx.save();
+    cx.translate(30, 45);
+    cx.scale(1.6, 1.6);
+    drawCar(cx, card.dataset.id, selectedColor);
+    cx.restore();
+  });
+}
+
+// ── ROOM CODE ────────────────────────────────────────────────
+function initRoomCode() {
+  const hash = window.location.hash.slice(1);
+  roomCode = (hash && /^[A-Z0-9]{6}$/i.test(hash))
+    ? hash.toUpperCase()
+    : Math.random().toString(36).slice(2, 8).toUpperCase();
+  window.location.hash = roomCode;
+  document.getElementById('room-code').textContent = roomCode;
+}
+
+function copyLink() {
+  const url = `${location.origin}${location.pathname}#${roomCode}`;
+  navigator.clipboard.writeText(url).then(() => showToast('Link copied! 🔗'));
+}
+
+// ── PARTYKIT ─────────────────────────────────────────────────
+function connectPartyKit() {
+  if (socket) { socket.onclose = null; socket.close(); }
+  try {
+    socket = new WebSocket(`wss://${PARTYKIT_HOST}/party/${roomCode}`);
+    socket.onopen    = () => showToast('Connected to room');
+    socket.onmessage = handleMessage;
+    socket.onclose   = () => setTimeout(connectPartyKit, 2000);
+    socket.onerror   = () => {};
+  } catch (_) {}
+}
+
+function handleMessage(e) {
+  const msg = JSON.parse(e.data);
+  if (msg.type === 'welcome') { myId = msg.id; return; }
+  if (msg.type === 'init')    { remotePlayers = msg.players || {}; }
+  if (msg.type === 'update' && msg.id !== myId) { remotePlayers[msg.id] = msg.state; }
+  if (msg.type === 'leave')   { delete remotePlayers[msg.id]; showToast('A player left'); }
+  updatePlayerCount();
+}
+
+function sendUpdate() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  const now = Date.now();
+  if (now - lastSendTime < SEND_INTERVAL) return;
+  lastSendTime = now;
+  socket.send(JSON.stringify({
+    type: 'update',
+    state: { x: carX, y: carY, angle: carAngle, speedState, carType: selectedCar, color: selectedColor, name: playerName },
+  }));
+}
+
+function updatePlayerCount() {
+  document.getElementById('player-count').textContent =
+    `👤 ${1 + Object.keys(remotePlayers).length}`;
+}
+
+// ── SPEED CONTROLS ───────────────────────────────────────────
+const SPEED_ORDER = ['park', 'slow', 'fast'];
+
+function gas() {
+  const i = SPEED_ORDER.indexOf(speedState);
+  if (i < 2) speedState = SPEED_ORDER[i + 1];
+  updateSpeedHUD();
+}
+
+function brake() {
+  const i = SPEED_ORDER.indexOf(speedState);
+  if (i > 0) speedState = SPEED_ORDER[i - 1];
+  updateSpeedHUD();
+}
+
+function updateSpeedHUD() {
+  const labels = { park: 'PARK', slow: 'SLOW', fast: 'FAST' };
+  document.getElementById('speed-label').textContent = labels[speedState];
+  const pipClasses = {
+    park: ['park', '',     ''    ],
+    slow: ['park', 'slow', ''    ],
+    fast: ['park', 'slow', 'fast'],
+  };
+  ['pip1','pip2','pip3'].forEach((id, i) => {
+    document.getElementById(id).className = 'pip ' + pipClasses[speedState][i];
+  });
+}
+
+// ── INPUT ────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'g' || e.key === 'G') gas();
+  if (e.key === 'b' || e.key === 'B') brake();
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+function setupTurnButtons() {
+  [['btn-left','ArrowLeft'], ['btn-right','ArrowRight']].forEach(([id, key]) => {
+    const btn = document.getElementById(id);
+    const press   = () => { keys[key] = true;  btn.classList.add('pressed'); };
+    const release = () => { keys[key] = false; btn.classList.remove('pressed'); };
+    btn.addEventListener('touchstart', e => { e.preventDefault(); press(); },   { passive: false });
+    btn.addEventListener('touchend',   e => { e.preventDefault(); release(); }, { passive: false });
+    btn.addEventListener('mousedown',  press);
+    btn.addEventListener('mouseup',    release);
+    btn.addEventListener('mouseleave', release);
+  });
+}
+
+// ── GAME LOOP ────────────────────────────────────────────────
+function gameLoop(timestamp) {
+  if (lastTime === null) lastTime = timestamp;
+  const dt = Math.min(timestamp - lastTime, 100);
+  lastTime = timestamp;
+
+  if (keys['ArrowLeft'])  carAngle -= TURN_RATE * dt / 1000;
+  if (keys['ArrowRight']) carAngle += TURN_RATE * dt / 1000;
+
+  const spd = SPEEDS[speedState];
+  if (spd > 0) {
+    carX = Math.max(0, Math.min(mapW, carX + Math.sin(carAngle) * spd * dt / 1000));
+    carY = Math.max(0, Math.min(mapH, carY - Math.cos(carAngle) * spd * dt / 1000));
+  }
+
+  render();
+  sendUpdate();
+  animFrameId = requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  const cw = canvas.width, ch = canvas.height;
+  const cx = cw / 2, cy = ch / 2;
+
+  ctx.clearRect(0, 0, cw, ch);
+
+  // background colour for areas outside the map
+  ctx.fillStyle = '#3a5c3a';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // world transform: center on car, rotate so car faces up
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-carAngle);
+
+  ctx.drawImage(mapImg, -carX, -carY, mapW, mapH);
+
+  // remote players in world space
+  for (const p of Object.values(remotePlayers)) {
+    ctx.save();
+    ctx.translate(p.x - carX, p.y - carY);
+    ctx.rotate(p.angle);
+    drawCar(ctx, p.carType || 'classic', p.color || '#dc2626');
+    drawNameLabel(ctx, p.name || '');
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // local car — always at canvas center, always upright
+  ctx.save();
+  ctx.translate(cx, cy);
+  drawCar(ctx, selectedCar, selectedColor);
+  ctx.restore();
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────
+function startGame() {
+  playerName = document.getElementById('name-input').value.trim() || 'Driver';
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('game').style.display  = 'block';
+  resizeCanvas();
+
+  const go = () => {
+    lastTime = null;
+    speedState = 'park';
+    updateSpeedHUD();
+    updatePlayerCount();
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    animFrameId = requestAnimationFrame(gameLoop);
+    connectPartyKit();
+  };
+
+  if (mapImg) { go(); return; }
+
+  mapImg = new Image();
+  mapImg.onload = () => {
+    mapW = mapImg.naturalWidth  * MAP_SCALE;
+    mapH = mapImg.naturalHeight * MAP_SCALE;
+    carX = mapW * 0.47;
+    carY = mapH * 0.83;
+    go();
+  };
+  mapImg.src = 'map.jpg';
+}
+
+function backToMenu() {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  if (socket)      { socket.onclose = null; socket.close(); socket = null; }
+  speedState = 'park';
+  document.getElementById('game').style.display  = 'none';
+  document.getElementById('setup').style.display = 'flex';
+}
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ── TOAST ────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+buildSetupScreen();
+initRoomCode();
+setupTurnButtons();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  push:
+    branches: ["claude/2d-driving-game-PW7QP", "main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-pages:
+    name: GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  deploy-partykit:
+    name: PartyKit Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Deploy to PartyKit (skipped if token not set)
+        run: |
+          if [ -n "$PARTYKIT_TOKEN" ]; then
+            npx partykit@latest deploy --token "$PARTYKIT_TOKEN"
+          else
+            echo "PARTYKIT_TOKEN secret not set — skipping PartyKit deploy."
+            echo "Run 'npx partykit login' then 'npx partykit token generate' and add the result as a repo secret."
+          fi
+        env:
+          PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
