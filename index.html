@@ -241,6 +241,23 @@
       backdrop-filter: blur(6px);
     }
 
+    #cam-lock-btn {
+      position: absolute; top: 50px; right: 14px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.6);
+      padding: 7px 14px; border-radius: 20px;
+      font-size: 0.72rem; font-family: inherit;
+      cursor: pointer; pointer-events: all;
+      backdrop-filter: blur(6px);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    #cam-lock-btn.active {
+      background: rgba(255,210,0,0.15);
+      border-color: rgba(255,210,0,0.5);
+      color: #ffd200;
+    }
+
     /* Toast */
     #toast {
       position: absolute;
@@ -322,6 +339,7 @@
 
     <div id="toast"></div>
     <button id="menu-btn" onclick="backToMenu()">≡ Menu</button>
+    <button id="cam-lock-btn" onclick="toggleCameraLock()">🧭 N↑ Lock</button>
   </div>
 </div>
 
@@ -363,6 +381,7 @@ let carX = 0, carY = 0, carAngle = 0;
 let speedState = 'park';
 let keys = {};
 
+let cameraLocked  = false;
 let myId          = null;
 let roomCode      = '';
 let socket        = null;
@@ -769,10 +788,10 @@ function render() {
   ctx.fillStyle = '#3a5c3a';
   ctx.fillRect(0, 0, cw, ch);
 
-  // world transform: center on car, rotate so car faces up
+  // world transform: center on car; rotate unless camera is north-locked
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(-carAngle);
+  if (!cameraLocked) ctx.rotate(-carAngle);
 
   ctx.drawImage(mapImg, -carX, -carY, mapW, mapH);
 
@@ -788,11 +807,20 @@ function render() {
 
   ctx.restore();
 
-  // local car — always at canvas center, always upright
+  // local car — always at canvas center; rotated to heading when north-locked
   ctx.save();
   ctx.translate(cx, cy);
+  if (cameraLocked) ctx.rotate(carAngle);
   drawCar(ctx, selectedCar, selectedColor);
   ctx.restore();
+}
+
+// ── CAMERA LOCK ──────────────────────────────────────────────
+function toggleCameraLock() {
+  cameraLocked = !cameraLocked;
+  const btn = document.getElementById('cam-lock-btn');
+  btn.classList.toggle('active', cameraLocked);
+  btn.textContent = cameraLocked ? '🧭 N↑ Locked' : '🧭 N↑ Lock';
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
