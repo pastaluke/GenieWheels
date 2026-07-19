@@ -123,6 +123,7 @@ This is the heart of the doc — the format you'll export and I'll bake.
   "provides": ["bandaids"],
   "accepts":  [],
   "radius": 70,
+  "access": "car",
   "snap": { "splineId": "sp_1", "t": 0.34 }
 }
 ```
@@ -134,7 +135,12 @@ This is the heart of the doc — the format you'll export and I'll bake.
 - `accepts` — item types this node will **request** as a destination. `[]` means
   "accepts nothing special"; `["*"]` means "can request anything". A node can
   both provide and accept.
-- `radius` — how close (world px, after scaling) the car must stop to interact.
+- `radius` — how close (world px, after scaling) you must stop to interact.
+- `access` — **how you interact with this node** *(decided: per-node)*:
+  - `"car"` — park the car within `radius` (default; roadside stops).
+  - `"foot"` — must be **on foot** within `radius` (off-road buildings the car
+    can't reach; forces you to park nearby and walk the last stretch).
+  - `"any"` — either works.
 - `snap` — optional: the road + parameter the node is attached to, so autopilot
   knows where on the network to pull over. Auto-computed by the editor as
   "nearest point on nearest spline"; can be cleared for off-road nodes reachable
@@ -237,15 +243,20 @@ An in-browser editor, dev-gated. Not shipped to players.
 
 "Cars don't drive where we don't want them to." A car position is **on-road** if
 its distance to the nearest spline centerline ≤ that spline's `width/2` (in world
-px). Enforcement is a per-map policy so we can tune feel:
+px). Policy is a per-map setting so we can tune feel:
 
-- **`block`** (recommended default): if a move would leave the road, project the
-  car back to the nearest boundary point — you slide along the edge instead of
-  crossing it. Firm but not jarring.
-- **`slow`**: grass is drivable but heavily speed-capped (arcade feel; lets you
-  cut corners at a cost).
+- **`slow`** — **decided default**: grass is drivable but heavily speed-capped.
+  Off the road you're throttled (e.g. capped to `slow`, or slower), so you *can*
+  cut a corner or reach a foot-only node's parking spot, but roads are clearly the
+  fast way around. Arcade feel, and it plays nicely with `access: "foot"` nodes
+  (park on grass near the building, then walk).
+- **`block`**: if a move would leave the road, project the car back to the nearest
+  boundary — you slide along the edge. Firmest containment; kept as an option.
 - **`free`**: no containment; roads only matter for autopilot. Useful while
   authoring.
+
+We store an off-road speed factor (e.g. `offroadFactor: 0.35`) per map so "how
+slow is grass" is tunable without code changes.
 
 Performance: with a handful of splines, nearest-segment distance each frame is
 trivial. If a map ever has many splines, we bucket segments into a coarse grid
@@ -286,11 +297,13 @@ A player is either **driving** or **on-foot**.
   free 360° movement, no gas/brake). Camera stays north-up while walking
   (rotating-world only makes sense in a car).
 - **Enter:** walk within range of a car and press enter to drive it again.
-- **Why it exists:** some nodes/buildings sit off the road where a car can't
-  reach; you park nearby and walk the last stretch to pick up / drop off. It also
-  opens the door to on-foot-only interactions later.
-- **Containment on foot:** recommend **free-roam** (walk anywhere on the rug),
-  since the whole point is reaching off-road spots. Open question in §15.
+- **Why it exists:** `access: "foot"` nodes sit off the road where a car can't
+  reach; you park nearby (on grass, throttled) and walk the last stretch to pick
+  up / drop off. Because some nodes are foot-only, **on-foot mode is a dependency
+  of the mission loop**, not an optional extra — see the reordered phasing (§14).
+- **Containment on foot:** **decided — walk anywhere.** The avatar roams the whole
+  rug freely (grass, buildings, off-road), since the whole point is reaching spots
+  a car can't.
 - **Multiplayer:** `mode: "drive" | "foot"` goes in the synced state; remote
   players render as a car or an avatar accordingly.
 
@@ -320,11 +333,11 @@ Mission {
 1. **Generate:** pick a provider node with item `X`, and a requester node that
    accepts `X`. Create an `available` mission. **Both nodes light up** — the
    source glows "has `X` to deliver", the destination glows "wants `X`".
-2. **Pick up:** a player parks within the source node's radius (on-foot or in
-   car — TBD, §15) → mission → `picked_up`; the item is now "in the vehicle";
-   source stops glowing, destination keeps glowing.
-3. **Deliver:** park within the destination node's radius → `delivered`; reward
-   granted; destination stops glowing.
+2. **Pick up:** a player is within the source node's radius **in the way that
+   node's `access` allows** (car / foot / any) → mission → `picked_up`; the item
+   is now carried; source stops glowing, destination keeps glowing.
+3. **Deliver:** reach the destination node (again honoring its `access`) →
+   `delivered`; reward granted; destination stops glowing.
 4. **Expire** (optional): time out and clear if we add `expiresAt`.
 
 ### 11.4 Node lighting
@@ -333,13 +346,18 @@ renders a glow/pulse + a chip (`🩹 deliver` / `🩹 wanted`). Purely derived f
 active missions.
 
 ### 11.5 Authority (multiplayer)
-Recommended: **server-authoritative missions via PartyKit** so both brothers see
-the *same* board and can split deliveries (co-op) or race (competitive). The
-PartyKit server owns the mission list, generation timer, and completion; clients
-render and send "attempt pickup/dropoff at node N" which the server validates.
-- Phase-in: start with **local** missions (single-player, deterministic) to build
-  the loop, then move authority to the server. The client mission code barely
-  changes — only where the list comes from.
+**Decided: server-authoritative from day one.** The PartyKit server owns the
+mission list, generation timer, and completion so both brothers always see the
+*same* board and can split deliveries (co-op) or race (competitive). Clients
+render the board and send intents — "attempt pickup/dropoff at node N" — which the
+server validates (checks the player is actually within the node, honoring
+`access`) before advancing mission state and broadcasting the update.
+
+Consequence: **missions require the PartyKit server to be deployed** (the
+`PARTYKIT_TOKEN` setup from earlier). Until then the game runs as it does today —
+free-drive with no mission board. We'll build the mission UI so it simply shows
+"connecting…" rather than breaking when the server is absent. Worth getting the
+token in place before we start the mission phase.
 
 ---
 
@@ -384,44 +402,45 @@ You (editor)  ──Export──▶  world JSON (§4)  ──send to me──▶
 
 Each phase is shippable on its own.
 
+Reordered to match the decisions: grass-is-slow containment, per-node `access`
+(so on-foot is required before missions), and shared missions from day one.
+
 | Phase | Deliverable | Notes |
 |------|-------------|-------|
 | **0** | JSON schema + loader + debug overlay | Load a hand-written sample `city.world.json`, draw roads/nodes over the map. Proves the contract. |
 | **1** | Editor: splines + width + export/import | The authoring MVP. You can draw the city's roads and send JSON back. |
-| **2** | Editor: nodes + labels + provides/accepts | Place "Hospital → bandaids" style nodes; export includes them. |
-| **3** | Road containment (`block`/`slow`/`free`) | Cars kept on the road network. |
+| **2** | Editor: nodes + labels + provides/accepts + `access` | Place "Hospital → bandaids" nodes and mark each car/foot/any; export includes them. |
+| **3** | Containment `slow` (+ `offroadFactor`) | Roads are fast, grass throttles you; keeps cars mostly on-network without hard walls. |
 | **4** | Autopilot v1 (follow one spline, pure pursuit) | First self-driving. |
 | **5** | Network graph + A* routing | Autopilot drives node→node over the whole network. |
-| **6** | Exit car / on-foot mode | Avatar, enter/exit, synced in MP. |
-| **7** | Missions v1 (local, single-player) | Generate, light nodes, pickup/dropoff, reward. |
-| **8** | Missions v2 (PartyKit-authoritative, shared) | Both players see the same board. |
+| **6** | Exit car / on-foot mode (walk-anywhere) | Avatar, enter/exit, synced in MP. Prereq for foot-only nodes. |
+| **7** | Missions (PartyKit-authoritative, shared) | Server owns the board; both players see the same missions; pickup/dropoff honors per-node `access`. Needs the PartyKit token deployed. |
 
 Recommended near-term target: **Phases 0–2** (get you authoring the city map and
-exporting real data), then **3–4** (containment + first autopilot) since those
-were called out as the motivating wins.
+exporting real data), then **3–4** (grass containment + first autopilot) since
+those were called out as the motivating wins. Get the **PartyKit token** deployed
+before Phase 7, since shared missions depend on it.
 
 ---
 
-## 15. Decisions needed
+## 15. Decisions
 
-Defaults are my recommendations; flag any you want changed and I'll fold them in
-before we build.
+### Settled
+1. **Off-road policy** → **`slow`**. Grass is drivable but throttled
+   (`offroadFactor`); roads are the fast route. (§8)
+2. **Pickup/dropoff** → **per-node `access`** (`car` / `foot` / `any`). Each node
+   declares how you interact with it. (§4.3, §11.3)
+3. **On-foot roaming** → **walk anywhere.** Avatar roams the whole rug freely.
+   (§10)
+4. **Mission authority** → **shared / server-authoritative from day one** via
+   PartyKit. Requires the token deployed before Phase 7. (§11.5)
 
-1. **Off-road policy** — default `block` (slide along road edge). OK, or do you
-   want grass drivable-but-slow?
-2. **Pickup/dropoff** — must you be **on foot** at a node, or does **parking the
-   car** within radius count? (On-foot is more of a "game"; car-only is faster to
-   build.) Default: allow either.
-3. **On-foot roaming** — walk anywhere, or keep the avatar near roads/paths?
-   Default: walk anywhere.
-4. **Mission authority** — build **shared/server-authoritative** from the start,
-   or local-first then upgrade? Default: local-first (Phase 7) → shared (Phase 8).
-5. **Editor access** — dev-only via `#edit` (recommended), or a button players can
-   reach too?
-6. **Scoring/rewards** — do deliveries earn points/currency now, or is that a
-   later layer? Default: minimal score counter now, economy later.
+### Still open (low-stakes; running on these defaults unless you say otherwise)
+5. **Editor access** — dev-only via `#edit` (recommended), or reachable by
+   players too? Default: dev-only.
+6. **Scoring/rewards** — minimal score counter now, fuller economy later.
 7. **Baked data delivery** — separate `data/*.json` fetched at runtime
-   (git-diffable) vs inlined into JS (one less request). Default: separate file.
+   (git-diffable) vs inlined into JS. Default: separate file.
 
 ---
 
