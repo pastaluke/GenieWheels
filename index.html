@@ -105,6 +105,28 @@
     .swatch:hover { transform: scale(1.15); }
     .swatch.active { border-color: white; transform: scale(1.2); box-shadow: 0 0 12px rgba(255,255,255,0.3); }
 
+    .map-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .map-card {
+      background: rgba(255,255,255,0.04);
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 18px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      text-align: center;
+      user-select: none;
+      min-width: 110px;
+    }
+    .map-card:hover { border-color: rgba(255,210,0,0.35); background: rgba(255,210,0,0.05); }
+    .map-card.active {
+      border-color: #ffd200;
+      background: rgba(255,210,0,0.08);
+      box-shadow: 0 0 22px rgba(255,210,0,0.12);
+    }
+    .map-emoji { font-size: 1.7rem; line-height: 1; }
+    .map-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; margin-top: 6px; color: #64748b; }
+    .map-card.active .map-label { color: #ffd200; }
+
     .start-btn {
       background: linear-gradient(135deg, #f7971e, #ffd200);
       color: #0f1923;
@@ -298,6 +320,11 @@
     <div class="color-grid" id="color-grid"></div>
   </div>
 
+  <div class="section">
+    <div class="label">Choose your map</div>
+    <div class="map-grid" id="map-grid"></div>
+  </div>
+
   <button class="start-btn" onclick="startGame()">Start Driving →</button>
 </div>
 
@@ -346,10 +373,19 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
 const PARTYKIT_HOST  = 'geniewheels.pastaluke.partykit.dev';
-const MAP_SCALE      = 1.8;
 const SPEEDS         = { park: 0, slow: 90, fast: 260 }; // px/sec
 const TURN_RATE      = 130 * Math.PI / 180;              // rad/sec
 const SEND_INTERVAL  = 50;                                // ms
+
+// ── MAPS (levels) ────────────────────────────────────────────
+// scale = world-pixel multiplier over the image's natural size.
+// startX/startY/startAngle position the car on a road at spawn.
+const MAPS = [
+  { id: 'city',      label: 'City Streets',    emoji: '🏙️',
+    src: 'map2.jpg', scale: 1.0, startX: 0.24, startY: 0.42, startAngle: Math.PI/2 },
+  { id: 'adventure', label: 'Adventure Board',  emoji: '🗺️',
+    src: 'map.jpg',  scale: 1.8, startX: 0.47, startY: 0.83, startAngle: 0 },
+];
 
 // ── CAR + COLOR DEFINITIONS ──────────────────────────────────
 const CAR_TYPES = [
@@ -375,6 +411,7 @@ const COLORS = [
 // ── STATE ────────────────────────────────────────────────────
 let selectedCar   = 'classic';
 let selectedColor = COLORS[0].hex;
+let selectedMap   = MAPS[0].id;
 let playerName    = 'Driver';
 
 let carX = 0, carY = 0, carAngle = 0;
@@ -388,6 +425,7 @@ let socket        = null;
 let remotePlayers = {};
 
 let mapImg  = null;
+let loadedMapSrc = null;
 let mapW    = 0, mapH = 0;
 let lastTime     = null;
 let lastSendTime = 0;
@@ -626,6 +664,23 @@ function buildSetupScreen() {
     sw.addEventListener('click', () => selectColor(col.hex));
     colorGrid.appendChild(sw);
   }
+
+  const mapGrid = document.getElementById('map-grid');
+  for (const m of MAPS) {
+    const card = document.createElement('div');
+    card.className = 'map-card' + (m.id === selectedMap ? ' active' : '');
+    card.dataset.id = m.id;
+    card.innerHTML = `<div class="map-emoji">${m.emoji}</div><div class="map-label">${m.label}</div>`;
+    card.addEventListener('click', () => selectMap(m.id));
+    mapGrid.appendChild(card);
+  }
+}
+
+function selectMap(id) {
+  selectedMap = id;
+  document.querySelectorAll('.map-card').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === id)
+  );
 }
 
 function selectCar(id) {
@@ -700,13 +755,13 @@ function sendUpdate() {
   lastSendTime = now;
   socket.send(JSON.stringify({
     type: 'update',
-    state: { x: carX, y: carY, angle: carAngle, speedState, carType: selectedCar, color: selectedColor, name: playerName },
+    state: { x: carX, y: carY, angle: carAngle, speedState, carType: selectedCar, color: selectedColor, name: playerName, map: selectedMap },
   }));
 }
 
 function updatePlayerCount() {
-  document.getElementById('player-count').textContent =
-    `👤 ${1 + Object.keys(remotePlayers).length}`;
+  const here = Object.values(remotePlayers).filter(p => !p.map || p.map === selectedMap).length;
+  document.getElementById('player-count').textContent = `👤 ${1 + here}`;
 }
 
 // ── SPEED CONTROLS ───────────────────────────────────────────
@@ -795,8 +850,9 @@ function render() {
 
   ctx.drawImage(mapImg, -carX, -carY, mapW, mapH);
 
-  // remote players in world space
+  // remote players in world space (only those on the same map)
   for (const p of Object.values(remotePlayers)) {
+    if (p.map && p.map !== selectedMap) continue;
     ctx.save();
     ctx.translate(p.x - carX, p.y - carY);
     ctx.rotate(p.angle);
@@ -830,9 +886,17 @@ function startGame() {
   document.getElementById('game').style.display  = 'block';
   resizeCanvas();
 
+  const conf = MAPS.find(m => m.id === selectedMap) || MAPS[0];
+
   const go = () => {
+    mapW = mapImg.naturalWidth  * conf.scale;
+    mapH = mapImg.naturalHeight * conf.scale;
+    carX = mapW * conf.startX;
+    carY = mapH * conf.startY;
+    carAngle = conf.startAngle;
     lastTime = null;
     speedState = 'park';
+    remotePlayers = {};
     updateSpeedHUD();
     updatePlayerCount();
     if (animFrameId) cancelAnimationFrame(animFrameId);
@@ -840,17 +904,12 @@ function startGame() {
     connectPartyKit();
   };
 
-  if (mapImg) { go(); return; }
+  // reuse the cached image only when the same map is already loaded
+  if (mapImg && loadedMapSrc === conf.src) { go(); return; }
 
   mapImg = new Image();
-  mapImg.onload = () => {
-    mapW = mapImg.naturalWidth  * MAP_SCALE;
-    mapH = mapImg.naturalHeight * MAP_SCALE;
-    carX = mapW * 0.47;
-    carY = mapH * 0.83;
-    go();
-  };
-  mapImg.src = 'map.jpg';
+  mapImg.onload = () => { loadedMapSrc = conf.src; go(); };
+  mapImg.src = conf.src;
 }
 
 function backToMenu() {
