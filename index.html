@@ -370,6 +370,7 @@
   </div>
 </div>
 
+<script src="world.js"></script>
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
 const PARTYKIT_HOST  = 'geniewheels.pastaluke.partykit.dev';
@@ -382,9 +383,11 @@ const SEND_INTERVAL  = 50;                                // ms
 // startX/startY/startAngle position the car on a road at spawn.
 const MAPS = [
   { id: 'city',      label: 'City Streets',    emoji: '🏙️',
-    src: 'map2.jpg', scale: 1.0, startX: 0.24, startY: 0.42, startAngle: Math.PI/2 },
+    src: 'map2.jpg', scale: 1.0, startX: 0.24, startY: 0.42, startAngle: Math.PI/2,
+    world: 'data/city.world.json' },
   { id: 'adventure', label: 'Adventure Board',  emoji: '🗺️',
-    src: 'map.jpg',  scale: 1.8, startX: 0.47, startY: 0.83, startAngle: 0 },
+    src: 'map.jpg',  scale: 1.8, startX: 0.47, startY: 0.83, startAngle: 0,
+    world: 'data/adventure.world.json' },
 ];
 
 // ── CAR + COLOR DEFINITIONS ──────────────────────────────────
@@ -427,6 +430,9 @@ let remotePlayers = {};
 let mapImg  = null;
 let loadedMapSrc = null;
 let mapW    = 0, mapH = 0;
+let curScale = 1;
+let worldData = null;          // baked roads/nodes for the current map
+let showOverlay = false;       // debug overlay toggle (press 'O')
 let lastTime     = null;
 let lastSendTime = 0;
 let animFrameId  = null;
@@ -797,6 +803,7 @@ window.addEventListener('keydown', e => {
   keys[e.key] = true;
   if (e.key === 'g' || e.key === 'G') gas();
   if (e.key === 'b' || e.key === 'B') brake();
+  if (e.key === 'o' || e.key === 'O') toggleOverlay();
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -850,6 +857,8 @@ function render() {
 
   ctx.drawImage(mapImg, -carX, -carY, mapW, mapH);
 
+  drawWorldOverlay();
+
   // remote players in world space (only those on the same map)
   for (const p of Object.values(remotePlayers)) {
     if (p.map && p.map !== selectedMap) continue;
@@ -879,6 +888,50 @@ function toggleCameraLock() {
   btn.textContent = cameraLocked ? '🧭 N↑ Locked' : '🧭 N↑ Lock';
 }
 
+// ── WORLD DATA (roads / nodes) ───────────────────────────────
+function loadWorldData(conf) {
+  worldData = null;
+  if (!conf.world || typeof GW === 'undefined') return;
+  fetch(conf.world)
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j) { worldData = GW.loadWorld(j); worldData.mapId = conf.id; } })
+    .catch(() => { worldData = null; });
+}
+
+function toggleOverlay() {
+  showOverlay = !showOverlay;
+  const n = worldData ? worldData.splines.length : 0;
+  showToast(showOverlay ? `Road overlay ON (${n} roads)` : 'Road overlay OFF');
+}
+
+// Draw baked roads/nodes in world space. Call inside the world transform,
+// where world point (wx,wy) is drawn at (wx - carX, wy - carY).
+function drawWorldOverlay() {
+  if (!showOverlay || !worldData) return;
+  const s = curScale;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const sp of worldData.splines) {
+    if (!sp.poly || sp.poly.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(sp.poly[0].x * s - carX, sp.poly[0].y * s - carY);
+    for (let i = 1; i < sp.poly.length; i++)
+      ctx.lineTo(sp.poly[i].x * s - carX, sp.poly[i].y * s - carY);
+    ctx.strokeStyle = 'rgba(60,160,255,0.35)';
+    ctx.lineWidth = sp.width * s;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  for (const nd of worldData.nodes) {
+    ctx.beginPath();
+    ctx.arc(nd.x * s - carX, nd.y * s - carY, nd.radius * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(34,197,94,0.20)';
+    ctx.fill();
+    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+
 // ── NAVIGATION ───────────────────────────────────────────────
 function startGame() {
   playerName = document.getElementById('name-input').value.trim() || 'Driver';
@@ -891,9 +944,11 @@ function startGame() {
   const go = () => {
     mapW = mapImg.naturalWidth  * conf.scale;
     mapH = mapImg.naturalHeight * conf.scale;
+    curScale = conf.scale;
     carX = mapW * conf.startX;
     carY = mapH * conf.startY;
     carAngle = conf.startAngle;
+    loadWorldData(conf);
     lastTime = null;
     speedState = 'park';
     remotePlayers = {};

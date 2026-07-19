@@ -5,8 +5,10 @@ Design doc for the next big feature set: a **road/spline layer**, an in-browser
 economy** — plus the **JSON contract** that lets you author a map and hand the
 data back to be baked in.
 
-Status: **planning**. Nothing here is built yet. This doc is the plan we'll
-implement in phases.
+Status: **in progress**. Phases 0–1 are built (plus a head start on Phase 2
+nodes): `world.js` (data model + geometry), `editor.html` (authoring tool), an
+in-game debug overlay (press **O**), and starter `data/*.world.json`. Remaining
+phases below are still planned.
 
 ---
 
@@ -407,9 +409,9 @@ Reordered to match the decisions: grass-is-slow containment, per-node `access`
 
 | Phase | Deliverable | Notes |
 |------|-------------|-------|
-| **0** | JSON schema + loader + debug overlay | Load a hand-written sample `city.world.json`, draw roads/nodes over the map. Proves the contract. |
-| **1** | Editor: splines + width + export/import | The authoring MVP. You can draw the city's roads and send JSON back. |
-| **2** | Editor: nodes + labels + provides/accepts + `access` | Place "Hospital → bandaids" nodes and mark each car/foot/any; export includes them. |
+| **0 ✅** | JSON schema + loader + debug overlay | `world.js` + `data/*.world.json`; game loads baked data and draws roads/nodes over the map (toggle **O**). Contract proven; overlay verified pixel-aligned. |
+| **1 ✅** | Editor: splines + width + export/import | `editor.html`: pan/zoom, draw/move/delete control points, per-spline width, localStorage autosave, JSON export/import. |
+| **2 ◐** | Editor: nodes + labels + provides/accepts + `access` | Node placement, labels, provides/accepts, access (car/foot/any), radius, auto-snap — all working in the editor. Remaining: in-game node visuals/catalog polish. |
 | **3** | Containment `slow` (+ `offroadFactor`) | Roads are fast, grass throttles you; keeps cars mostly on-network without hard walls. |
 | **4** | Autopilot v1 (follow one spline, pure pursuit) | First self-driving. |
 | **5** | Network graph + A* routing | Autopilot drives node→node over the whole network. |

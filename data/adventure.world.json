@@ -1,0 +1,9 @@
+{
+  "format": "geniewheels.world",
+  "version": 1,
+  "mapId": "adventure",
+  "imageSize": { "w": 4000, "h": 2252 },
+  "splines": [],
+  "nodes": [],
+  "items": []
+}

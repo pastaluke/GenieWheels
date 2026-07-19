@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenieWheels — Map Editor</title>
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#0f1923;color:#e2e8f0;
+    font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
+  #bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:10;
+    display:flex;align-items:center;gap:8px;padding:0 12px;
+    background:rgba(15,25,35,0.92);border-bottom:1px solid rgba(255,255,255,0.08);
+    backdrop-filter:blur(8px);flex-wrap:wrap}
+  .brand{font-weight:800;letter-spacing:-0.5px;color:#ffd200;margin-right:6px}
+  select,button,input{font-family:inherit;font-size:0.8rem}
+  select,.btn{background:rgba(255,255,255,0.06);color:#e2e8f0;border:1px solid rgba(255,255,255,0.12);
+    border-radius:8px;padding:7px 11px;cursor:pointer;transition:background .12s,border-color .12s}
+  .btn:hover{background:rgba(255,255,255,0.12)}
+  .btn.tool.active{background:rgba(255,210,0,0.15);border-color:#ffd200;color:#ffd200}
+  .btn.primary{background:linear-gradient(135deg,#f7971e,#ffd200);color:#0f1923;border:none;font-weight:700}
+  .sep{width:1px;height:26px;background:rgba(255,255,255,0.12);margin:0 2px}
+  .wlab{font-size:0.72rem;color:#94a3b8}
+  #widthVal{color:#ffd200;font-weight:700;min-width:34px;display:inline-block;text-align:right}
+  input[type=range]{width:120px;vertical-align:middle}
+  canvas{position:fixed;inset:52px 0 0 0;display:block;cursor:crosshair;touch-action:none}
+  #hint{position:fixed;left:12px;bottom:12px;z-index:5;font-size:0.72rem;color:#64748b;
+    background:rgba(15,25,35,0.8);padding:8px 12px;border-radius:8px;max-width:340px;line-height:1.5}
+  #hint b{color:#94a3b8}
+  /* node form */
+  #nodeForm{position:fixed;top:64px;right:12px;z-index:12;width:230px;
+    background:rgba(15,25,35,0.96);border:1px solid rgba(255,255,255,0.14);border-radius:12px;
+    padding:14px;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+  #nodeForm h3{font-size:0.8rem;margin-bottom:10px;color:#ffd200}
+  #nodeForm label{display:block;font-size:0.68rem;color:#94a3b8;margin:8px 0 3px}
+  #nodeForm input,#nodeForm select{width:100%;background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.14);border-radius:6px;padding:6px 8px;color:#e2e8f0}
+  #nodeForm .row{display:flex;gap:8px}
+  #nodeForm .del{margin-top:12px;width:100%;background:rgba(220,38,38,0.2);border-color:#dc2626;color:#fca5a5}
+  /* export panel */
+  #io{position:fixed;inset:0;z-index:20;background:rgba(5,10,15,0.82);display:none;
+    align-items:center;justify-content:center}
+  #ioCard{width:min(680px,92vw);height:min(70vh,620px);background:#0f1923;border:1px solid rgba(255,255,255,0.15);
+    border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  #ioCard h2{font-size:1rem;color:#ffd200}
+  #ioText{flex:1;width:100%;resize:none;background:#0a1119;color:#cbd5e1;border:1px solid rgba(255,255,255,0.12);
+    border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:0.72rem;line-height:1.45}
+  #ioBtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+  .toast{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:30;
+    background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.12);border-radius:10px;
+    padding:8px 16px;font-size:0.8rem;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span class="brand">🛠️ GenieWheels Editor</span>
+  <select id="mapSel" title="Map"></select>
+  <div class="sep"></div>
+  <button class="btn tool active" id="tSelect" title="Select / move (V)">▤ Select</button>
+  <button class="btn tool" id="tSpline" title="Draw road (S)">✎ Road</button>
+  <button class="btn tool" id="tNode" title="Place node (N)">📍 Node</button>
+  <div class="sep"></div>
+  <span class="wlab">Width</span>
+  <input type="range" id="widthRange" min="16" max="400" value="90">
+  <span id="widthVal">90</span>
+  <div class="sep"></div>
+  <span class="wlab">Overlay</span>
+  <input type="range" id="opac" min="0" max="100" value="55" style="width:80px" title="Road overlay opacity">
+  <div class="sep"></div>
+  <button class="btn" id="btnExport">⭳ Export</button>
+  <button class="btn" id="btnImport">⭱ Import</button>
+  <button class="btn" id="btnClear" title="Clear this map's data">🗑 Clear</button>
+</div>
+
+<canvas id="cv"></canvas>
+
+<div id="nodeForm">
+  <h3>Node</h3>
+  <label>Label</label>
+  <input id="nfLabel" type="text" placeholder="e.g. Hospital" autocomplete="off">
+  <label>Provides (comma-separated)</label>
+  <input id="nfProvides" type="text" placeholder="bandaids, medicine" autocomplete="off">
+  <label>Accepts (comma-separated, * = any)</label>
+  <input id="nfAccepts" type="text" placeholder="* or pizza, mail" autocomplete="off">
+  <div class="row">
+    <div style="flex:1">
+      <label>Access</label>
+      <select id="nfAccess">
+        <option value="car">Car</option>
+        <option value="foot">Foot</option>
+        <option value="any">Any</option>
+      </select>
+    </div>
+    <div style="flex:1">
+      <label>Radius</label>
+      <input id="nfRadius" type="number" min="10" max="500" value="60">
+    </div>
+  </div>
+  <button class="btn del" id="nfDelete">Delete node</button>
+</div>
+
+<div id="io">
+  <div id="ioCard">
+    <h2 id="ioTitle">Export</h2>
+    <textarea id="ioText" spellcheck="false"></textarea>
+    <div id="ioBtns">
+      <button class="btn" id="ioCopy">Copy</button>
+      <button class="btn" id="ioDownload">Download .json</button>
+      <button class="btn primary" id="ioLoad" style="display:none">Load</button>
+      <button class="btn" id="ioClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="world.js"></script>
+<script>
+// ── maps (mirrors MAPS in index.html) ────────────────────────
+const MAPS = [
+  { id:'city',      label:'City Streets',   src:'map2.jpg', data:'data/city.world.json' },
+  { id:'adventure', label:'Adventure Board', src:'map.jpg', data:'data/adventure.world.json' },
+];
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+let mapConf = MAPS[0];
+let mapImg = null;
+let world = GW.emptyWorld('city', null);
+
+// viewport (native px -> screen via scale/pan)
+let view = { zoom: 1, x: 0, y: 0 };
+let tool = 'select';
+
+// interaction state
+let draft = null;               // spline being drawn: {points:[...], width}
+let sel = null;                 // {type:'point',spline,idx} | {type:'node',node} | {type:'spline',spline}
+let drag = null;                // active drag descriptor
+let pan = null;                 // {sx,sy,ox,oy}
+let spaceDown = false;
+let overlayOpacity = 0.55;
+let defaultWidth = 90;
+
+// ── coordinate transforms ────────────────────────────────────
+const toNative = (sx, sy) => ({ x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom });
+const handleR  = () => 7 / view.zoom;   // constant screen-size handles
+
+// ── init ─────────────────────────────────────────────────────
+function buildMapSelect() {
+  const sel = document.getElementById('mapSel');
+  MAPS.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.id; o.textContent = m.label; sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => loadMap(sel.value));
+}
+
+function loadMap(id) {
+  mapConf = MAPS.find(m => m.id === id) || MAPS[0];
+  mapImg = new Image();
+  mapImg.onload = () => {
+    world.imageSize = { w: mapImg.naturalWidth, h: mapImg.naturalHeight };
+    fitView();
+  };
+  mapImg.src = mapConf.src;
+
+  // load saved (localStorage) first, else baked data file, else empty
+  const saved = localStorage.getItem('gw_world_' + id);
+  if (saved) {
+    try { world = GW.loadWorld(saved); toast('Loaded your saved edits'); }
+    catch (e) { world = GW.emptyWorld(id, null); }
+  } else {
+    world = GW.emptyWorld(id, null);
+    fetch(mapConf.data).then(r => r.ok ? r.json() : null).then(j => {
+      if (j) { world = GW.loadWorld(j); world.mapId = id; }
+    }).catch(() => {});
+  }
+  world.mapId = id;
+  draft = null; sel = null; hideNodeForm();
+}
+
+function fitView() {
+  if (!mapImg) return;
+  const cw = cv.width, ch = cv.height;
+  const z = Math.min(cw / mapImg.naturalWidth, ch / mapImg.naturalHeight) * 0.96;
+  view.zoom = z;
+  view.x = (cw - mapImg.naturalWidth * z) / 2;
+  view.y = (ch - mapImg.naturalHeight * z) / 2;
+}
+
+function resize() {
+  cv.width = window.innerWidth;
+  cv.height = window.innerHeight - 52;
+  if (!view._inited && mapImg) { fitView(); view._inited = true; }
+}
+window.addEventListener('resize', resize);
+
+// ── autosave ─────────────────────────────────────────────────
+function save() {
+  if (!world.mapId) return;
+  localStorage.setItem('gw_world_' + world.mapId, GW.serialize(world));
+}
+
+// ── rendering ────────────────────────────────────────────────
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0a0f14';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!mapImg || !mapImg.complete) { requestAnimationFrame(draw); return; }
+
+  ctx.setTransform(view.zoom, 0, 0, view.zoom, view.x, view.y);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(mapImg, 0, 0);
+
+  // roads
+  for (const s of world.splines) drawSpline(s, s === selSpline());
+  if (draft && draft.points.length) drawDraft();
+
+  // nodes
+  for (const n of world.nodes) drawNode(n, sel && sel.type === 'node' && sel.node === n);
+
+  requestAnimationFrame(draw);
+}
+
+function selSpline() {
+  if (!sel) return null;
+  if (sel.type === 'spline') return sel.spline;
+  if (sel.type === 'point') return sel.spline;
+  return null;
+}
+
+function drawSpline(s, selected) {
+  if (!s.poly || s.poly.length < 2) { drawControlPoints(s, selected); return; }
+  // road band
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(60,160,255,${overlayOpacity})`;
+  ctx.lineWidth = s.width;
+  ctx.beginPath();
+  ctx.moveTo(s.poly[0].x, s.poly[0].y);
+  for (let i = 1; i < s.poly.length; i++) ctx.lineTo(s.poly[i].x, s.poly[i].y);
+  ctx.stroke();
+  // centerline
+  ctx.strokeStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = (selected ? 2.5 : 1.5) / view.zoom;
+  ctx.stroke();
+  drawControlPoints(s, selected);
+}
+
+function drawControlPoints(s, selected) {
+  const r = handleR();
+  s.points.forEach((p, i) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.85)';
+    ctx.fill();
+    ctx.lineWidth = 1.5 / view.zoom; ctx.strokeStyle = '#0f1923'; ctx.stroke();
+    const isSel = sel && sel.type === 'point' && sel.spline === s && sel.idx === i;
+    if (isSel) { ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.7, 0, Math.PI*2);
+      ctx.strokeStyle = '#ffd200'; ctx.lineWidth = 2/view.zoom; ctx.stroke(); }
+  });
+}
+
+function drawDraft() {
+  const poly = GW.flatten(draft.points, false);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = `rgba(255,210,0,${Math.max(0.3, overlayOpacity)})`;
+  ctx.lineWidth = draft.width;
+  if (poly.length >= 2) {
+    ctx.beginPath(); ctx.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+    ctx.stroke();
+  }
+  const r = handleR();
+  draft.points.forEach(p => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fillStyle = '#ffd200'; ctx.fill();
+    ctx.lineWidth = 1.5/view.zoom; ctx.strokeStyle='#0f1923'; ctx.stroke();
+  });
+}
+
+function drawNode(n, selected) {
+  ctx.beginPath(); ctx.arc(n.x, n.y, n.radius, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(34,197,94,0.18)';
+  ctx.fill();
+  ctx.lineWidth = 2 / view.zoom;
+  ctx.strokeStyle = selected ? '#ffd200' : '#22c55e';
+  ctx.stroke();
+  // center pin
+  const r = handleR() * 1.2;
+  ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+  ctx.fillStyle = selected ? '#ffd200' : '#22c55e'; ctx.fill();
+  // label
+  if (n.label) {
+    ctx.setTransform(1,0,0,1,0,0);
+    const sx = n.x*view.zoom+view.x, sy = n.y*view.zoom+view.y;
+    ctx.font = '600 12px system-ui'; ctx.textAlign='center';
+    const w = ctx.measureText(n.label).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(sx - w/2 - 5, sy - r*view.zoom - 22, w + 10, 17);
+    ctx.fillStyle = '#fff'; ctx.fillText(n.label, sx, sy - r*view.zoom - 10);
+    ctx.setTransform(view.zoom,0,0,view.zoom,view.x,view.y);
+  }
+}
+
+// ── hit testing ──────────────────────────────────────────────
+function hitPoint(nx, ny) {
+  const r = handleR() * 1.6;
+  for (const s of world.splines) {
+    for (let i = s.points.length - 1; i >= 0; i--) {
+      if (Math.hypot(s.points[i].x - nx, s.points[i].y - ny) <= r)
+        return { type: 'point', spline: s, idx: i };
+    }
+  }
+  return null;
+}
+function hitNode(nx, ny) {
+  for (let i = world.nodes.length - 1; i >= 0; i--) {
+    const n = world.nodes[i];
+    if (Math.hypot(n.x - nx, n.y - ny) <= Math.max(n.radius, handleR()*2)) return n;
+  }
+  return null;
+}
+function hitSpline(nx, ny) {
+  for (const s of world.splines) {
+    if (!s.poly || s.poly.length < 2) continue;
+    const d = GW.distToPolyline(s.poly, nx, ny);
+    if (d.dist <= s.width / 2) return s;
+  }
+  return null;
+}
+
+// ── pointer input ────────────────────────────────────────────
+cv.addEventListener('pointerdown', (e) => {
+  cv.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY - 52;
+  const n = toNative(sx, sy);
+
+  if (spaceDown || e.button === 1 || e.button === 2) {
+    pan = { sx, sy, ox: view.x, oy: view.y }; return;
+  }
+
+  if (tool === 'select') {
+    const hp = hitPoint(n.x, n.y);
+    if (hp) { sel = hp; hideNodeForm(); drag = { kind:'point', ...hp }; return; }
+    const hn = hitNode(n.x, n.y);
+    if (hn) { sel = { type:'node', node:hn }; showNodeForm(hn); drag = { kind:'node', node:hn }; return; }
+    const hs = hitSpline(n.x, n.y);
+    if (hs) { sel = { type:'spline', spline:hs }; hideNodeForm(); syncWidthUI(hs.width); return; }
+    sel = null; hideNodeForm();
+    pan = { sx, sy, ox: view.x, oy: view.y };   // empty drag = pan
+    return;
+  }
+
+  if (tool === 'spline') {
+    if (!draft) draft = { points: [], width: defaultWidth };
+    draft.points.push({ x: n.x, y: n.y });
+    return;
+  }
+
+  if (tool === 'node') {
+    const node = GW.loadWorld({ nodes:[{ x:n.x, y:n.y, label:'', access:'car', radius:60 }] }).nodes[0];
+    GW.computeSnap(world, node);
+    world.nodes.push(node);
+    sel = { type:'node', node }; showNodeForm(node); save();
+    return;
+  }
+});
+
+cv.addEventListener('pointermove', (e) => {
+  const sx = e.clientX, sy = e.clientY - 52;
+  if (pan) { view.x = pan.ox + (sx - pan.sx); view.y = pan.oy + (sy - pan.sy); return; }
+  if (!drag) return;
+  const n = toNative(sx, sy);
+  if (drag.kind === 'point') {
+    drag.spline.points[drag.idx].x = n.x;
+    drag.spline.points[drag.idx].y = n.y;
+    GW.reflow(drag.spline);
+  } else if (drag.kind === 'node') {
+    drag.node.x = n.x; drag.node.y = n.y;
+    GW.computeSnap(world, drag.node);
+  }
+});
+
+cv.addEventListener('pointerup', () => {
+  if (drag) save();
+  drag = null; pan = null;
+});
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+cv.addEventListener('dblclick', () => finishDraft());
+
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const sx = e.clientX, sy = e.clientY - 52;
+  const before = toNative(sx, sy);
+  const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+  view.zoom = Math.max(0.03, Math.min(8, view.zoom * factor));
+  // keep cursor anchored
+  view.x = sx - before.x * view.zoom;
+  view.y = sy - before.y * view.zoom;
+}, { passive: false });
+
+// ── keyboard ─────────────────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.code === 'Space') { spaceDown = true; cv.style.cursor='grab'; e.preventDefault(); }
+  if (e.key === 'v' || e.key === 'V') setTool('select');
+  if (e.key === 's' || e.key === 'S') setTool('spline');
+  if (e.key === 'n' || e.key === 'N') setTool('node');
+  if (e.key === 'Enter') finishDraft();
+  if (e.key === 'Escape') { draft = null; sel = null; hideNodeForm(); }
+  if (e.key === '[' ) adjustWidth(-6);
+  if (e.key === ']' ) adjustWidth(6);
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') { spaceDown = false; cv.style.cursor='crosshair'; }
+});
+
+function finishDraft() {
+  if (draft && draft.points.length >= 2) {
+    const sp = GW.loadWorld({ splines:[{ points:draft.points, width:draft.width }] }).splines[0];
+    world.splines.push(sp);
+    sel = { type:'spline', spline: sp };
+    save();
+  }
+  draft = null;
+}
+
+function deleteSelection() {
+  if (!sel) return;
+  if (sel.type === 'node') {
+    world.nodes = world.nodes.filter(n => n !== sel.node); hideNodeForm();
+  } else if (sel.type === 'point') {
+    const s = sel.spline;
+    if (s.points.length <= 2) { world.splines = world.splines.filter(x => x !== s); }
+    else { s.points.splice(sel.idx, 1); GW.reflow(s); }
+  } else if (sel.type === 'spline') {
+    world.splines = world.splines.filter(x => x !== sel.spline);
+  }
+  sel = null; save();
+}
+
+// ── tools & width UI ─────────────────────────────────────────
+function setTool(t) {
+  tool = t;
+  document.getElementById('tSelect').classList.toggle('active', t==='select');
+  document.getElementById('tSpline').classList.toggle('active', t==='spline');
+  document.getElementById('tNode').classList.toggle('active', t==='node');
+  if (t !== 'spline') { /* keep draft until finished elsewhere */ }
+  cv.style.cursor = t==='select' ? 'default' : 'crosshair';
+}
+document.getElementById('tSelect').onclick = () => setTool('select');
+document.getElementById('tSpline').onclick = () => setTool('spline');
+document.getElementById('tNode').onclick   = () => setTool('node');
+
+const widthRange = document.getElementById('widthRange');
+const widthVal = document.getElementById('widthVal');
+widthRange.addEventListener('input', () => {
+  const w = +widthRange.value; widthVal.textContent = w;
+  const s = selSpline();
+  if (s) { s.width = w; save(); }
+  else if (draft) { draft.width = w; }
+  else defaultWidth = w;
+});
+function syncWidthUI(w) { widthRange.value = w; widthVal.textContent = Math.round(w); }
+function adjustWidth(d) {
+  const s = selSpline();
+  if (s) { s.width = Math.max(16, Math.min(400, s.width + d)); syncWidthUI(s.width); save(); }
+  else { defaultWidth = Math.max(16, Math.min(400, defaultWidth + d)); if (draft) draft.width = defaultWidth; syncWidthUI(defaultWidth); }
+}
+
+document.getElementById('opac').addEventListener('input', (e) => { overlayOpacity = +e.target.value/100; });
+
+// ── node form ────────────────────────────────────────────────
+const nf = document.getElementById('nodeForm');
+let formNode = null;
+function showNodeForm(n) {
+  formNode = n; nf.style.display = 'block';
+  document.getElementById('nfLabel').value = n.label || '';
+  document.getElementById('nfProvides').value = (n.provides||[]).join(', ');
+  document.getElementById('nfAccepts').value = (n.accepts||[]).join(', ');
+  document.getElementById('nfAccess').value = n.access || 'car';
+  document.getElementById('nfRadius').value = n.radius || 60;
+}
+function hideNodeForm() { nf.style.display = 'none'; formNode = null; }
+const parseList = (s) => s.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+document.getElementById('nfLabel').addEventListener('input', e => { if(formNode){formNode.label=e.target.value; save();}});
+document.getElementById('nfProvides').addEventListener('input', e => { if(formNode){formNode.provides=parseList(e.target.value); save();}});
+document.getElementById('nfAccepts').addEventListener('input', e => { if(formNode){formNode.accepts=parseList(e.target.value); save();}});
+document.getElementById('nfAccess').addEventListener('change', e => { if(formNode){formNode.access=e.target.value; save();}});
+document.getElementById('nfRadius').addEventListener('input', e => { if(formNode){formNode.radius=Math.max(10,+e.target.value||60); save();}});
+document.getElementById('nfDelete').addEventListener('click', () => {
+  if (formNode) { world.nodes = world.nodes.filter(n => n !== formNode); hideNodeForm(); sel=null; save(); }
+});
+
+// ── export / import ──────────────────────────────────────────
+const io = document.getElementById('io');
+const ioText = document.getElementById('ioText');
+const ioLoad = document.getElementById('ioLoad');
+function openIO(mode) {
+  io.style.display = 'flex';
+  document.getElementById('ioTitle').textContent = mode === 'export' ? 'Export — copy this JSON and send it over' : 'Import — paste world JSON, then Load';
+  ioLoad.style.display = mode === 'import' ? 'inline-block' : 'none';
+  if (mode === 'export') { ioText.value = GW.serialize(world); ioText.readOnly = false; ioText.select?.(); }
+  else { ioText.value = ''; ioText.readOnly = false; ioText.focus(); }
+}
+document.getElementById('btnExport').onclick = () => openIO('export');
+document.getElementById('btnImport').onclick = () => openIO('import');
+document.getElementById('ioClose').onclick = () => io.style.display='none';
+document.getElementById('ioCopy').onclick = () => { ioText.select(); navigator.clipboard.writeText(ioText.value).then(()=>toast('Copied JSON')); };
+document.getElementById('ioDownload').onclick = () => {
+  const blob = new Blob([ioText.value || GW.serialize(world)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = (world.mapId||'map') + '.world.json'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+ioLoad.onclick = () => {
+  try {
+    const w = GW.loadWorld(ioText.value);
+    w.mapId = world.mapId;
+    world = w; save(); io.style.display='none'; toast('Imported ' + world.splines.length + ' roads, ' + world.nodes.length + ' nodes');
+  } catch (e) { toast('Invalid JSON: ' + e.message); }
+};
+
+document.getElementById('btnClear').onclick = () => {
+  if (!confirm('Clear all roads & nodes for this map? (your export is unaffected)')) return;
+  localStorage.removeItem('gw_world_' + world.mapId);
+  world = GW.emptyWorld(world.mapId, world.imageSize);
+  sel = null; draft = null; hideNodeForm(); toast('Cleared');
+};
+
+// ── toast ────────────────────────────────────────────────────
+let toastT = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900);
+}
+
+// ── boot ─────────────────────────────────────────────────────
+buildMapSelect();
+resize();
+loadMap('city');
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
