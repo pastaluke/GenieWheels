@@ -278,8 +278,8 @@
       backdrop-filter: blur(6px);
     }
 
-    #cam-lock-btn {
-      position: absolute; top: 50px; right: 14px;
+    #cam-lock-btn, #auto-btn, #overlay-btn {
+      position: absolute; right: 14px;
       background: rgba(0,0,0,0.5);
       border: 1px solid rgba(255,255,255,0.12);
       color: rgba(255,255,255,0.6);
@@ -287,9 +287,13 @@
       font-size: 0.72rem; font-family: inherit;
       cursor: pointer; pointer-events: all;
       backdrop-filter: blur(6px);
+      white-space: nowrap;
       transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    #cam-lock-btn.active {
+    #cam-lock-btn { top: 50px; }
+    #auto-btn     { top: 86px; }
+    #overlay-btn  { top: 122px; }
+    #cam-lock-btn.active, #auto-btn.active, #overlay-btn.active {
       background: rgba(255,210,0,0.15);
       border-color: rgba(255,210,0,0.5);
       color: #ffd200;
@@ -384,6 +388,8 @@
     <div id="toast"></div>
     <button id="menu-btn" onclick="backToMenu()">≡ Menu</button>
     <button id="cam-lock-btn" onclick="toggleCameraLock()">🧭 N↑ Lock</button>
+    <button id="auto-btn" onclick="toggleAutopilot()">🤖 Auto</button>
+    <button id="overlay-btn" onclick="toggleOverlay()">🛣️ Roads</button>
   </div>
 </div>
 
@@ -394,13 +400,15 @@ const PARTYKIT_HOST  = 'geniewheels.pastaluke.partykit.dev';
 const SPEEDS         = { park: 0, slow: 90, fast: 260 }; // px/sec
 const TURN_RATE      = 130 * Math.PI / 180;              // rad/sec
 const SEND_INTERVAL  = 50;                                // ms
+const OFFROAD_FACTOR = 0.4;                               // grass speed multiplier
+const AUTOPILOT_LOOKAHEAD = 240;                          // native px ahead on the road
 
 // ── MAPS (levels) ────────────────────────────────────────────
 // scale = world-pixel multiplier over the image's natural size.
 // startX/startY/startAngle position the car on a road at spawn.
 const MAPS = [
   { id: 'city',      label: 'City Streets',    emoji: '🏙️',
-    src: 'map2.jpg', scale: 1.0, startX: 0.24, startY: 0.42, startAngle: Math.PI/2,
+    src: 'map2.jpg', scale: 1.0, startX: 0.527, startY: 0.373, startAngle: Math.PI/2,
     world: 'data/city.world.json' },
   { id: 'adventure', label: 'Adventure Board',  emoji: '🗺️',
     src: 'map.jpg',  scale: 1.8, startX: 0.47, startY: 0.83, startAngle: 0,
@@ -450,6 +458,7 @@ let mapW    = 0, mapH = 0;
 let curScale = 1;
 let worldData = null;          // baked roads/nodes for the current map
 let showOverlay = false;       // debug overlay toggle (press 'O')
+let autopilot = false;         // follow-the-road self-driving
 let lastTime     = null;
 let lastSendTime = 0;
 let animFrameId  = null;
@@ -821,6 +830,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'g' || e.key === 'G') gas();
   if (e.key === 'b' || e.key === 'B') brake();
   if (e.key === 'o' || e.key === 'O') toggleOverlay();
+  if (e.key === 'p' || e.key === 'P') toggleAutopilot();
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -843,13 +853,28 @@ function gameLoop(timestamp) {
   const dt = Math.min(timestamp - lastTime, 100);
   lastTime = timestamp;
 
-  if (keys['ArrowLeft'])  carAngle -= TURN_RATE * dt / 1000;
-  if (keys['ArrowRight']) carAngle += TURN_RATE * dt / 1000;
+  // where are we on the road network? (native px = world px / scale)
+  const nx = carX / curScale, ny = carY / curScale;
+  let nearest = null, onRoad = false;
+  if (worldData && worldData.splines.length) {
+    nearest = GW.nearestOnRoads(worldData, nx, ny);
+    onRoad = !!(nearest && nearest.dist <= nearest.width / 2);
+  }
 
-  const spd = SPEEDS[speedState];
-  if (spd > 0) {
-    carX = Math.max(0, Math.min(mapW, carX + Math.sin(carAngle) * spd * dt / 1000));
-    carY = Math.max(0, Math.min(mapH, carY - Math.cos(carAngle) * spd * dt / 1000));
+  let spd;
+  if (autopilot && nearest) {
+    spd = autopilotStep(dt, nearest);
+  } else {
+    if (keys['ArrowLeft'])  carAngle -= TURN_RATE * dt / 1000;
+    if (keys['ArrowRight']) carAngle += TURN_RATE * dt / 1000;
+    spd = SPEEDS[speedState];
+  }
+
+  // grass slows you down; roads are the fast way around
+  const eff = spd * (onRoad ? 1 : OFFROAD_FACTOR);
+  if (eff > 0) {
+    carX = Math.max(0, Math.min(mapW, carX + Math.sin(carAngle) * eff * dt / 1000));
+    carY = Math.max(0, Math.min(mapH, carY - Math.cos(carAngle) * eff * dt / 1000));
   }
 
   render();
@@ -917,8 +942,71 @@ function loadWorldData(conf) {
 
 function toggleOverlay() {
   showOverlay = !showOverlay;
+  document.getElementById('overlay-btn').classList.toggle('active', showOverlay);
   const n = worldData ? worldData.splines.length : 0;
   showToast(showOverlay ? `Road overlay ON (${n} roads)` : 'Road overlay OFF');
+}
+
+// ── AUTOPILOT (follow the road) ──────────────────────────────
+function toggleAutopilot() {
+  if (!worldData || !worldData.splines.length) { showToast('No roads on this map yet'); return; }
+  autopilot = !autopilot;
+  document.getElementById('auto-btn').classList.toggle('active', autopilot);
+  document.getElementById('auto-btn').textContent = autopilot ? '🤖 Auto ON' : '🤖 Auto';
+  speedState = autopilot ? 'fast' : 'park';
+  updateSpeedHUD();
+  showToast(autopilot ? 'Autopilot engaged — following roads' : 'Autopilot off');
+}
+
+function normalizeAngle(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+function steerToward(cur, target, maxDelta) {
+  let d = normalizeAngle(target - cur);
+  if (d > maxDelta) d = maxDelta; else if (d < -maxDelta) d = -maxDelta;
+  return cur + d;
+}
+// Walk `dist` native px along a polyline from (segment i, param t) toward the
+// start (dir<0) or end (dir>0). Returns the point reached (clamped at ends).
+function walkAlongPoly(poly, i, t, dir, dist) {
+  let cx = poly[i].x + (poly[i + 1].x - poly[i].x) * t;
+  let cy = poly[i].y + (poly[i + 1].y - poly[i].y) * t;
+  let rem = dist;
+  if (dir > 0) {
+    for (let k = i; k < poly.length - 1; k++) {
+      const ax = k === i ? cx : poly[k].x, ay = k === i ? cy : poly[k].y;
+      const bx = poly[k + 1].x, by = poly[k + 1].y;
+      const L = Math.hypot(bx - ax, by - ay);
+      if (L >= rem) { const f = rem / L; return { x: ax + (bx - ax) * f, y: ay + (by - ay) * f }; }
+      rem -= L;
+    }
+    return { x: poly[poly.length - 1].x, y: poly[poly.length - 1].y };
+  } else {
+    for (let k = i; k >= 0; k--) {
+      const ax = k === i ? cx : poly[k + 1].x, ay = k === i ? cy : poly[k + 1].y;
+      const bx = poly[k].x, by = poly[k].y;
+      const L = Math.hypot(bx - ax, by - ay);
+      if (L >= rem) { const f = rem / L; return { x: ax + (bx - ax) * f, y: ay + (by - ay) * f }; }
+      rem -= L;
+    }
+    return { x: poly[0].x, y: poly[0].y };
+  }
+}
+// Steer toward a look-ahead point on the nearest road; returns target speed.
+function autopilotStep(dt, nearest) {
+  const sp = worldData.splines.find(s => s.id === nearest.splineId);
+  if (!sp || !sp.poly || sp.poly.length < 2) return SPEEDS[speedState];
+  const poly = sp.poly;
+  const i = Math.max(0, Math.min(poly.length - 2, nearest.i));
+  const tanx = poly[i + 1].x - poly[i].x, tany = poly[i + 1].y - poly[i].y;
+  const hx = Math.sin(carAngle), hy = -Math.cos(carAngle);
+  const dir = (tanx * hx + tany * hy) >= 0 ? 1 : -1;   // continue in the way we're facing
+  const target = walkAlongPoly(poly, i, nearest.t, dir, AUTOPILOT_LOOKAHEAD);
+  const tx = target.x * curScale, ty = target.y * curScale;
+  const desired = Math.atan2(tx - carX, -(ty - carY));
+  const turnErr = Math.abs(normalizeAngle(desired - carAngle));
+  carAngle = steerToward(carAngle, desired, TURN_RATE * dt / 1000);
+  const newState = turnErr > 0.5 ? 'slow' : 'fast';   // ease off for sharp turns
+  if (newState !== speedState) { speedState = newState; updateSpeedHUD(); }
+  return SPEEDS[speedState];
 }
 
 // Draw baked roads/nodes in world space. Call inside the world transform,
@@ -969,6 +1057,9 @@ function startGame() {
     lastTime = null;
     speedState = 'park';
     remotePlayers = {};
+    autopilot = false;
+    document.getElementById('auto-btn').classList.remove('active');
+    document.getElementById('auto-btn').textContent = '🤖 Auto';
     updateSpeedHUD();
     updatePlayerCount();
     if (animFrameId) cancelAnimationFrame(animFrameId);
