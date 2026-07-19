@@ -2,82 +2,153 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>GenieWheels — Map Editor</title>
 <style>
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;background:#0f1923;color:#e2e8f0;
-    font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
-  #bar{position:fixed;top:0;left:0;right:0;height:52px;z-index:10;
-    display:flex;align-items:center;gap:8px;padding:0 12px;
-    background:rgba(15,25,35,0.92);border-bottom:1px solid rgba(255,255,255,0.08);
-    backdrop-filter:blur(8px);flex-wrap:wrap}
-  .brand{font-weight:800;letter-spacing:-0.5px;color:#ffd200;margin-right:6px}
-  select,button,input{font-family:inherit;font-size:0.8rem}
-  select,.btn{background:rgba(255,255,255,0.06);color:#e2e8f0;border:1px solid rgba(255,255,255,0.12);
-    border-radius:8px;padding:7px 11px;cursor:pointer;transition:background .12s,border-color .12s}
-  .btn:hover{background:rgba(255,255,255,0.12)}
-  .btn.tool.active{background:rgba(255,210,0,0.15);border-color:#ffd200;color:#ffd200}
-  .btn.primary{background:linear-gradient(135deg,#f7971e,#ffd200);color:#0f1923;border:none;font-weight:700}
-  .sep{width:1px;height:26px;background:rgba(255,255,255,0.12);margin:0 2px}
-  .wlab{font-size:0.72rem;color:#94a3b8}
-  #widthVal{color:#ffd200;font-weight:700;min-width:34px;display:inline-block;text-align:right}
-  input[type=range]{width:120px;vertical-align:middle}
-  canvas{position:fixed;inset:52px 0 0 0;display:block;cursor:crosshair;touch-action:none}
-  #hint{position:fixed;left:12px;bottom:12px;z-index:5;font-size:0.72rem;color:#64748b;
-    background:rgba(15,25,35,0.8);padding:8px 12px;border-radius:8px;max-width:340px;line-height:1.5}
-  #hint b{color:#94a3b8}
-  /* node form */
-  #nodeForm{position:fixed;top:64px;right:12px;z-index:12;width:230px;
-    background:rgba(15,25,35,0.96);border:1px solid rgba(255,255,255,0.14);border-radius:12px;
-    padding:14px;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
-  #nodeForm h3{font-size:0.8rem;margin-bottom:10px;color:#ffd200}
-  #nodeForm label{display:block;font-size:0.68rem;color:#94a3b8;margin:8px 0 3px}
+  :root{ --bar:rgba(15,25,35,0.94); --line:rgba(255,255,255,0.1); --accent:#ffd200; }
+  html,body{height:100%;overflow:hidden;background:#0a0f14;color:#e2e8f0;
+    font-family:'Segoe UI',system-ui,sans-serif;user-select:none;-webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent}
+  body{display:flex;flex-direction:column;height:100dvh}
+  button,select,input{font-family:inherit}
+
+  /* ── top bar ── */
+  #bar{flex:0 0 auto;display:flex;align-items:center;gap:6px;
+    padding:8px calc(8px + env(safe-area-inset-right)) 8px calc(8px + env(safe-area-inset-left));
+    background:var(--bar);border-bottom:1px solid var(--line);backdrop-filter:blur(8px);z-index:20}
+  .brand{font-weight:800;color:var(--accent);font-size:0.95rem;white-space:nowrap}
+  .brand .txt{display:none}
+  #mapSel{background:rgba(255,255,255,0.07);color:#e2e8f0;border:1px solid var(--line);
+    border-radius:8px;padding:8px 8px;font-size:0.82rem;max-width:44vw}
+  .spacer{flex:1}
+  .iconbtn{background:rgba(255,255,255,0.06);color:#e2e8f0;border:1px solid var(--line);
+    border-radius:9px;min-width:40px;height:40px;padding:0 10px;font-size:0.95rem;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  .iconbtn:active{background:rgba(255,255,255,0.15)}
+  .iconbtn .txt{display:none;font-size:0.8rem;font-weight:600}
+
+  canvas{flex:1 1 auto;min-height:0;width:100%;display:block;touch-action:none;background:#0a0f14}
+
+  /* ── left tool rail ── */
+  #rail{position:fixed;left:calc(8px + env(safe-area-inset-left));top:50%;transform:translateY(-50%);
+    z-index:15;display:flex;flex-direction:column;gap:10px}
+  .tool{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);
+    background:rgba(15,25,35,0.85);color:#e2e8f0;font-size:1.3rem;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);
+    box-shadow:0 3px 12px rgba(0,0,0,0.4);transition:transform .1s}
+  .tool:active{transform:scale(0.92)}
+  .tool.active{background:rgba(255,210,0,0.18);border-color:var(--accent);color:var(--accent);
+    box-shadow:0 0 16px rgba(255,210,0,0.25)}
+  .tool small{position:absolute;bottom:-14px;font-size:0.55rem;color:#94a3b8;font-weight:700;letter-spacing:.5px}
+
+  /* ── zoom controls ── */
+  #zoom{position:fixed;right:calc(10px + env(safe-area-inset-right));
+    bottom:calc(92px + env(safe-area-inset-bottom));z-index:15;display:flex;flex-direction:column;gap:8px}
+  #zoom .iconbtn{width:46px;height:46px;border-radius:50%;background:rgba(15,25,35,0.85);backdrop-filter:blur(6px)}
+
+  /* ── bottom action bar ── */
+  #actionbar{position:fixed;left:0;right:0;bottom:0;z-index:15;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px calc(12px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+    background:var(--bar);border-top:1px solid var(--line);backdrop-filter:blur(8px)}
+  #ctxBtns{display:flex;gap:8px}
+  #ctxBtns:empty{display:none}
+  .abtn{background:rgba(255,255,255,0.08);color:#e2e8f0;border:1px solid var(--line);
+    border-radius:10px;padding:11px 15px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+  .abtn:active{background:rgba(255,255,255,0.18)}
+  .abtn.go{background:linear-gradient(135deg,#f7971e,#ffd200);color:#0f1923;border:none}
+  .abtn.danger{background:rgba(220,38,38,0.22);border-color:#dc2626;color:#fca5a5}
+  #widthWrap{display:flex;align-items:center;gap:8px;margin-left:auto}
+  #widthWrap .lab{font-size:0.72rem;color:#94a3b8}
+  #widthVal{color:var(--accent);font-weight:700;min-width:32px;text-align:right;font-size:0.82rem}
+  #widthRange{width:min(46vw,220px)}
+  input[type=range]{accent-color:var(--accent);height:28px}
+
+  /* ── node sheet ── */
+  #nodeForm{position:fixed;z-index:25;background:rgba(15,25,35,0.98);border:1px solid rgba(255,255,255,0.14);
+    padding:14px;display:none;box-shadow:0 -6px 30px rgba(0,0,0,0.55)}
+  /* mobile: bottom sheet */
+  #nodeForm{left:0;right:0;bottom:0;border-radius:16px 16px 0 0;
+    padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+  #nodeForm h3{font-size:0.85rem;margin-bottom:8px;color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+  #nodeForm .close{background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;padding:4px 8px}
+  #nodeForm label{display:block;font-size:0.66rem;color:#94a3b8;margin:8px 0 3px}
   #nodeForm input,#nodeForm select{width:100%;background:rgba(255,255,255,0.06);
-    border:1px solid rgba(255,255,255,0.14);border-radius:6px;padding:6px 8px;color:#e2e8f0}
-  #nodeForm .row{display:flex;gap:8px}
-  #nodeForm .del{margin-top:12px;width:100%;background:rgba(220,38,38,0.2);border-color:#dc2626;color:#fca5a5}
-  /* export panel */
-  #io{position:fixed;inset:0;z-index:20;background:rgba(5,10,15,0.82);display:none;
-    align-items:center;justify-content:center}
-  #ioCard{width:min(680px,92vw);height:min(70vh,620px);background:#0f1923;border:1px solid rgba(255,255,255,0.15);
-    border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
-  #ioCard h2{font-size:1rem;color:#ffd200}
-  #ioText{flex:1;width:100%;resize:none;background:#0a1119;color:#cbd5e1;border:1px solid rgba(255,255,255,0.12);
+    border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:10px;color:#e2e8f0;font-size:0.9rem}
+  #nodeForm .row{display:flex;gap:10px}
+  #nodeForm .del{margin-top:12px;width:100%;background:rgba(220,38,38,0.2);border:1px solid #dc2626;
+    color:#fca5a5;border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
+
+  /* ── export/import modal ── */
+  #io{position:fixed;inset:0;z-index:40;background:rgba(5,10,15,0.85);display:none;
+    align-items:center;justify-content:center;padding:16px}
+  #ioCard{width:min(680px,96vw);height:min(78vh,640px);background:#0f1923;border:1px solid rgba(255,255,255,0.15);
+    border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  #ioCard h2{font-size:0.95rem;color:var(--accent)}
+  #ioText{flex:1;width:100%;resize:none;background:#0a1119;color:#cbd5e1;border:1px solid var(--line);
     border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:0.72rem;line-height:1.45}
   #ioBtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-  .toast{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:30;
-    background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.12);border-radius:10px;
-    padding:8px 16px;font-size:0.8rem;opacity:0;transition:opacity .2s;pointer-events:none}
+
+  .toast{position:fixed;top:calc(60px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:50;
+    background:rgba(0,0,0,0.88);border:1px solid var(--line);border-radius:10px;padding:9px 16px;
+    font-size:0.82rem;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
+  #hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(58px + env(safe-area-inset-top));z-index:14;
+    background:rgba(15,25,35,0.9);border:1px solid var(--line);border-radius:10px;padding:8px 14px;
+    font-size:0.74rem;color:#cbd5e1;max-width:88vw;text-align:center;line-height:1.5;
+    transition:opacity .4s;pointer-events:none}
+
+  /* ── desktop niceties ── */
+  @media (min-width:760px){
+    .brand .txt{display:inline}
+    .iconbtn .txt{display:inline}
+    .tool small{display:block}
+    #mapSel{max-width:220px}
+    #nodeForm{left:auto;right:12px;bottom:auto;top:64px;width:250px;border-radius:12px}
+  }
 </style>
 </head>
 <body>
 
 <div id="bar">
-  <span class="brand">🛠️ GenieWheels Editor</span>
+  <span class="brand">🛠️<span class="txt">&nbsp;Editor</span></span>
   <select id="mapSel" title="Map"></select>
-  <div class="sep"></div>
-  <button class="btn tool active" id="tSelect" title="Select / move (V)">▤ Select</button>
-  <button class="btn tool" id="tSpline" title="Draw road (S)">✎ Road</button>
-  <button class="btn tool" id="tNode" title="Place node (N)">📍 Node</button>
-  <div class="sep"></div>
-  <span class="wlab">Width</span>
-  <input type="range" id="widthRange" min="16" max="400" value="90">
-  <span id="widthVal">90</span>
-  <div class="sep"></div>
-  <span class="wlab">Overlay</span>
-  <input type="range" id="opac" min="0" max="100" value="55" style="width:80px" title="Road overlay opacity">
-  <div class="sep"></div>
-  <button class="btn" id="btnExport">⭳ Export</button>
-  <button class="btn" id="btnImport">⭱ Import</button>
-  <button class="btn" id="btnClear" title="Clear this map's data">🗑 Clear</button>
+  <span class="spacer"></span>
+  <button class="iconbtn" id="btnExport" title="Export JSON">⭳<span class="txt">Export</span></button>
+  <button class="iconbtn" id="btnImport" title="Import JSON">⭱<span class="txt">Import</span></button>
+  <button class="iconbtn" id="btnClear" title="Clear this map">🗑<span class="txt">Clear</span></button>
 </div>
 
 <canvas id="cv"></canvas>
 
+<!-- left tool rail -->
+<div id="rail">
+  <button class="tool active" id="tSelect" title="Select / move (V)" style="position:relative">▤<small>Select</small></button>
+  <button class="tool" id="tSpline" title="Draw road (S)" style="position:relative">✎<small>Road</small></button>
+  <button class="tool" id="tNode" title="Place node (N)" style="position:relative">📍<small>Node</small></button>
+</div>
+
+<!-- zoom -->
+<div id="zoom">
+  <button class="iconbtn" id="zIn" title="Zoom in">＋</button>
+  <button class="iconbtn" id="zOut" title="Zoom out">－</button>
+  <button class="iconbtn" id="zFit" title="Fit map">⤢</button>
+</div>
+
+<!-- bottom action bar -->
+<div id="actionbar">
+  <div id="ctxBtns"></div>
+  <div id="widthWrap">
+    <span class="lab">Width</span>
+    <input type="range" id="widthRange" min="16" max="400" value="90">
+    <span id="widthVal">90</span>
+  </div>
+</div>
+
+<!-- node sheet -->
 <div id="nodeForm">
-  <h3>Node</h3>
+  <h3>Node <button class="close" id="nfClose">✕</button></h3>
   <label>Label</label>
   <input id="nfLabel" type="text" placeholder="e.g. Hospital" autocomplete="off">
   <label>Provides (comma-separated)</label>
@@ -85,40 +156,34 @@
   <label>Accepts (comma-separated, * = any)</label>
   <input id="nfAccepts" type="text" placeholder="* or pizza, mail" autocomplete="off">
   <div class="row">
-    <div style="flex:1">
-      <label>Access</label>
-      <select id="nfAccess">
-        <option value="car">Car</option>
-        <option value="foot">Foot</option>
-        <option value="any">Any</option>
-      </select>
-    </div>
-    <div style="flex:1">
-      <label>Radius</label>
-      <input id="nfRadius" type="number" min="10" max="500" value="60">
-    </div>
+    <div style="flex:1"><label>Access</label>
+      <select id="nfAccess"><option value="car">Car</option><option value="foot">Foot</option><option value="any">Any</option></select></div>
+    <div style="flex:1"><label>Radius</label>
+      <input id="nfRadius" type="number" min="10" max="800" value="60"></div>
   </div>
-  <button class="btn del" id="nfDelete">Delete node</button>
+  <button class="del" id="nfDelete">Delete node</button>
 </div>
 
+<!-- export/import -->
 <div id="io">
   <div id="ioCard">
     <h2 id="ioTitle">Export</h2>
     <textarea id="ioText" spellcheck="false"></textarea>
     <div id="ioBtns">
-      <button class="btn" id="ioCopy">Copy</button>
-      <button class="btn" id="ioDownload">Download .json</button>
-      <button class="btn primary" id="ioLoad" style="display:none">Load</button>
-      <button class="btn" id="ioClose">Close</button>
+      <button class="abtn" id="ioCopy">Copy</button>
+      <button class="abtn" id="ioDownload">Download</button>
+      <button class="abtn go" id="ioLoad" style="display:none">Load</button>
+      <button class="abtn" id="ioClose">Close</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="hint">Road tool: <b>tap</b> to drop points, then <b>Finish</b>. <b>Pinch</b> to zoom · <b>two fingers</b> to pan.</div>
 
 <script src="world.js"></script>
 <script>
-// ── maps (mirrors MAPS in index.html) ────────────────────────
+// ── maps (mirror index.html) ─────────────────────────────────
 const MAPS = [
   { id:'city',      label:'City Streets',   src:'map2.jpg', data:'data/city.world.json' },
   { id:'adventure', label:'Adventure Board', src:'map.jpg', data:'data/adventure.world.json' },
@@ -127,423 +192,429 @@ const MAPS = [
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 
-let mapConf = MAPS[0];
-let mapImg = null;
+let mapConf = MAPS[0], mapImg = null;
 let world = GW.emptyWorld('city', null);
-
-// viewport (native px -> screen via scale/pan)
-let view = { zoom: 1, x: 0, y: 0 };
+let view = { zoom: 1, x: 0, y: 0, _inited: false };
 let tool = 'select';
 
-// interaction state
-let draft = null;               // spline being drawn: {points:[...], width}
-let sel = null;                 // {type:'point',spline,idx} | {type:'node',node} | {type:'spline',spline}
-let drag = null;                // active drag descriptor
-let pan = null;                 // {sx,sy,ox,oy}
-let spaceDown = false;
-let overlayOpacity = 0.55;
+let draft = null;   // spline being drawn
+let sel = null;     // selection
+let drag = null;    // active handle/node drag
 let defaultWidth = 90;
 
-// ── coordinate transforms ────────────────────────────────────
-const toNative = (sx, sy) => ({ x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom });
-const handleR  = () => 7 / view.zoom;   // constant screen-size handles
+// ── multi-touch pointer tracking ─────────────────────────────
+const pointers = new Map();   // id -> {x,y}
+let gesture = null;           // pinch/two-finger pan
+let single = null;            // tap/drag candidate
+let pan = null;               // one-finger pan
+const TAP_SLOP = 8;           // px movement below which it's a tap
 
-// ── init ─────────────────────────────────────────────────────
-function buildMapSelect() {
-  const sel = document.getElementById('mapSel');
-  MAPS.forEach(m => {
-    const o = document.createElement('option');
-    o.value = m.id; o.textContent = m.label; sel.appendChild(o);
-  });
-  sel.addEventListener('change', () => loadMap(sel.value));
+// ── coordinate transforms (rect-based → robust to layout) ────
+function screenXY(clientX, clientY) {
+  const r = cv.getBoundingClientRect();
+  return { sx: clientX - r.left, sy: clientY - r.top };
 }
+function toNative(clientX, clientY) {
+  const { sx, sy } = screenXY(clientX, clientY);
+  return { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom };
+}
+const handleR = () => 8 / view.zoom;
+const hitTol  = () => Math.max(handleR() * 1.7, 20 / view.zoom); // ~finger-sized
 
+// ── sizing ───────────────────────────────────────────────────
+function resize() {
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.max(1, Math.round(r.width));
+  cv.height = Math.max(1, Math.round(r.height));
+  maybeFit();
+}
+function maybeFit() {
+  if (view._inited || !mapImg || !mapImg.complete || !cv.width) return;
+  fitView(); view._inited = true;
+}
+function fitView() {
+  if (!mapImg || !cv.width) return;
+  const z = Math.min(cv.width / mapImg.naturalWidth, cv.height / mapImg.naturalHeight) * 0.94;
+  view.zoom = z;
+  view.x = (cv.width - mapImg.naturalWidth * z) / 2;
+  view.y = (cv.height - mapImg.naturalHeight * z) / 2;
+}
+new ResizeObserver(resize).observe(cv);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+// ── map + data loading ───────────────────────────────────────
+function buildMapSelect() {
+  const s = document.getElementById('mapSel');
+  MAPS.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.label; s.appendChild(o); });
+  s.addEventListener('change', () => loadMap(s.value));
+}
 function loadMap(id) {
   mapConf = MAPS.find(m => m.id === id) || MAPS[0];
+  view._inited = false;
   mapImg = new Image();
-  mapImg.onload = () => {
-    world.imageSize = { w: mapImg.naturalWidth, h: mapImg.naturalHeight };
-    fitView();
-  };
+  mapImg.onload = () => { world.imageSize = { w: mapImg.naturalWidth, h: mapImg.naturalHeight }; maybeFit(); };
   mapImg.src = mapConf.src;
 
-  // load saved (localStorage) first, else baked data file, else empty
   const saved = localStorage.getItem('gw_world_' + id);
   if (saved) {
     try { world = GW.loadWorld(saved); toast('Loaded your saved edits'); }
     catch (e) { world = GW.emptyWorld(id, null); }
   } else {
     world = GW.emptyWorld(id, null);
-    fetch(mapConf.data).then(r => r.ok ? r.json() : null).then(j => {
-      if (j) { world = GW.loadWorld(j); world.mapId = id; }
-    }).catch(() => {});
+    fetch(mapConf.data).then(r => r.ok ? r.json() : null).then(j => { if (j) { world = GW.loadWorld(j); world.mapId = id; } }).catch(() => {});
   }
   world.mapId = id;
-  draft = null; sel = null; hideNodeForm();
+  draft = null; sel = null; hideNodeForm(); updateActionBar();
 }
-
-function fitView() {
-  if (!mapImg) return;
-  const cw = cv.width, ch = cv.height;
-  const z = Math.min(cw / mapImg.naturalWidth, ch / mapImg.naturalHeight) * 0.96;
-  view.zoom = z;
-  view.x = (cw - mapImg.naturalWidth * z) / 2;
-  view.y = (ch - mapImg.naturalHeight * z) / 2;
-}
-
-function resize() {
-  cv.width = window.innerWidth;
-  cv.height = window.innerHeight - 52;
-  if (!view._inited && mapImg) { fitView(); view._inited = true; }
-}
-window.addEventListener('resize', resize);
-
-// ── autosave ─────────────────────────────────────────────────
-function save() {
-  if (!world.mapId) return;
-  localStorage.setItem('gw_world_' + world.mapId, GW.serialize(world));
-}
+function save() { if (world.mapId) localStorage.setItem('gw_world_' + world.mapId, GW.serialize(world)); }
 
 // ── rendering ────────────────────────────────────────────────
 function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0a0f14';
   ctx.fillRect(0, 0, cv.width, cv.height);
-  if (!mapImg || !mapImg.complete) { requestAnimationFrame(draw); return; }
-
-  ctx.setTransform(view.zoom, 0, 0, view.zoom, view.x, view.y);
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(mapImg, 0, 0);
-
-  // roads
-  for (const s of world.splines) drawSpline(s, s === selSpline());
-  if (draft && draft.points.length) drawDraft();
-
-  // nodes
-  for (const n of world.nodes) drawNode(n, sel && sel.type === 'node' && sel.node === n);
-
+  if (mapImg && mapImg.complete) {
+    ctx.setTransform(view.zoom, 0, 0, view.zoom, view.x, view.y);
+    ctx.drawImage(mapImg, 0, 0);
+    for (const s of world.splines) drawSpline(s, s === selSpline());
+    if (draft && draft.points.length) drawDraft();
+    for (const n of world.nodes) drawNode(n, sel && sel.type === 'node' && sel.node === n);
+  }
   requestAnimationFrame(draw);
 }
+function selSpline() { return sel && (sel.type === 'spline' || sel.type === 'point') ? sel.spline : null; }
 
-function selSpline() {
-  if (!sel) return null;
-  if (sel.type === 'spline') return sel.spline;
-  if (sel.type === 'point') return sel.spline;
-  return null;
+function strokePoly(poly) {
+  ctx.beginPath(); ctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+  ctx.stroke();
 }
-
 function drawSpline(s, selected) {
-  if (!s.poly || s.poly.length < 2) { drawControlPoints(s, selected); return; }
-  // road band
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.strokeStyle = `rgba(60,160,255,${overlayOpacity})`;
-  ctx.lineWidth = s.width;
-  ctx.beginPath();
-  ctx.moveTo(s.poly[0].x, s.poly[0].y);
-  for (let i = 1; i < s.poly.length; i++) ctx.lineTo(s.poly[i].x, s.poly[i].y);
-  ctx.stroke();
-  // centerline
-  ctx.strokeStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.75)';
-  ctx.lineWidth = (selected ? 2.5 : 1.5) / view.zoom;
-  ctx.stroke();
-  drawControlPoints(s, selected);
+  if (s.poly && s.poly.length >= 2) {
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(60,160,255,0.5)'; ctx.lineWidth = s.width; strokePoly(s.poly);
+    ctx.strokeStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = (selected ? 3 : 1.6) / view.zoom; strokePoly(s.poly);
+  }
+  drawHandles(s, selected);
 }
-
-function drawControlPoints(s, selected) {
+function drawHandles(s, selected) {
   const r = handleR();
   s.points.forEach((p, i) => {
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.85)';
-    ctx.fill();
+    ctx.fillStyle = selected ? '#ffd200' : 'rgba(255,255,255,0.9)'; ctx.fill();
     ctx.lineWidth = 1.5 / view.zoom; ctx.strokeStyle = '#0f1923'; ctx.stroke();
-    const isSel = sel && sel.type === 'point' && sel.spline === s && sel.idx === i;
-    if (isSel) { ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.7, 0, Math.PI*2);
-      ctx.strokeStyle = '#ffd200'; ctx.lineWidth = 2/view.zoom; ctx.stroke(); }
+    if (sel && sel.type === 'point' && sel.spline === s && sel.idx === i) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.9, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffd200'; ctx.lineWidth = 2.5 / view.zoom; ctx.stroke();
+    }
   });
 }
-
 function drawDraft() {
   const poly = GW.flatten(draft.points, false);
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.strokeStyle = `rgba(255,210,0,${Math.max(0.3, overlayOpacity)})`;
-  ctx.lineWidth = draft.width;
   if (poly.length >= 2) {
-    ctx.beginPath(); ctx.moveTo(poly[0].x, poly[0].y);
-    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
-    ctx.stroke();
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,210,0,0.5)'; ctx.lineWidth = draft.width; strokePoly(poly);
   }
   const r = handleR();
-  draft.points.forEach(p => {
-    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+  draft.points.forEach((p, i) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * (i === draft.points.length - 1 ? 1.3 : 1), 0, Math.PI * 2);
     ctx.fillStyle = '#ffd200'; ctx.fill();
-    ctx.lineWidth = 1.5/view.zoom; ctx.strokeStyle='#0f1923'; ctx.stroke();
+    ctx.lineWidth = 1.5 / view.zoom; ctx.strokeStyle = '#0f1923'; ctx.stroke();
   });
 }
-
 function drawNode(n, selected) {
-  ctx.beginPath(); ctx.arc(n.x, n.y, n.radius, 0, Math.PI*2);
-  ctx.fillStyle = 'rgba(34,197,94,0.18)';
-  ctx.fill();
-  ctx.lineWidth = 2 / view.zoom;
-  ctx.strokeStyle = selected ? '#ffd200' : '#22c55e';
-  ctx.stroke();
-  // center pin
-  const r = handleR() * 1.2;
-  ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+  ctx.beginPath(); ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(34,197,94,0.18)'; ctx.fill();
+  ctx.lineWidth = 2 / view.zoom; ctx.strokeStyle = selected ? '#ffd200' : '#22c55e'; ctx.stroke();
+  const r = handleR() * 1.3;
+  ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
   ctx.fillStyle = selected ? '#ffd200' : '#22c55e'; ctx.fill();
-  // label
   if (n.label) {
-    ctx.setTransform(1,0,0,1,0,0);
-    const sx = n.x*view.zoom+view.x, sy = n.y*view.zoom+view.y;
-    ctx.font = '600 12px system-ui'; ctx.textAlign='center';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sx = n.x * view.zoom + view.x, sy = n.y * view.zoom + view.y;
+    ctx.font = '600 12px system-ui'; ctx.textAlign = 'center';
     const w = ctx.measureText(n.label).width;
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(sx - w/2 - 5, sy - r*view.zoom - 22, w + 10, 17);
-    ctx.fillStyle = '#fff'; ctx.fillText(n.label, sx, sy - r*view.zoom - 10);
-    ctx.setTransform(view.zoom,0,0,view.zoom,view.x,view.y);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(sx - w / 2 - 5, sy - r * view.zoom - 22, w + 10, 17);
+    ctx.fillStyle = '#fff'; ctx.fillText(n.label, sx, sy - r * view.zoom - 10);
+    ctx.setTransform(view.zoom, 0, 0, view.zoom, view.x, view.y);
   }
 }
 
 // ── hit testing ──────────────────────────────────────────────
 function hitPoint(nx, ny) {
-  const r = handleR() * 1.6;
-  for (const s of world.splines) {
-    for (let i = s.points.length - 1; i >= 0; i--) {
-      if (Math.hypot(s.points[i].x - nx, s.points[i].y - ny) <= r)
-        return { type: 'point', spline: s, idx: i };
-    }
-  }
+  const tol = hitTol();
+  for (const s of world.splines)
+    for (let i = s.points.length - 1; i >= 0; i--)
+      if (Math.hypot(s.points[i].x - nx, s.points[i].y - ny) <= tol) return { type: 'point', spline: s, idx: i };
   return null;
 }
 function hitNode(nx, ny) {
   for (let i = world.nodes.length - 1; i >= 0; i--) {
     const n = world.nodes[i];
-    if (Math.hypot(n.x - nx, n.y - ny) <= Math.max(n.radius, handleR()*2)) return n;
+    if (Math.hypot(n.x - nx, n.y - ny) <= Math.max(n.radius, hitTol())) return n;
   }
   return null;
 }
 function hitSpline(nx, ny) {
   for (const s of world.splines) {
     if (!s.poly || s.poly.length < 2) continue;
-    const d = GW.distToPolyline(s.poly, nx, ny);
-    if (d.dist <= s.width / 2) return s;
+    if (GW.distToPolyline(s.poly, nx, ny).dist <= s.width / 2 + hitTol()) return s;
   }
   return null;
 }
 
 // ── pointer input ────────────────────────────────────────────
 cv.addEventListener('pointerdown', (e) => {
-  cv.setPointerCapture(e.pointerId);
-  const sx = e.clientX, sy = e.clientY - 52;
-  const n = toNative(sx, sy);
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-  if (spaceDown || e.button === 1 || e.button === 2) {
-    pan = { sx, sy, ox: view.x, oy: view.y }; return;
-  }
+  if (pointers.size === 2) { beginGesture(); single = null; drag = null; pan = null; return; }
+  if (pointers.size > 2) return;
+
+  const p = toNative(e.clientX, e.clientY);
+  single = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, native: p, button: e.button };
+  fadeHint();
+
+  if (e.button === 1 || e.button === 2) { pan = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }; return; }
 
   if (tool === 'select') {
-    const hp = hitPoint(n.x, n.y);
-    if (hp) { sel = hp; hideNodeForm(); drag = { kind:'point', ...hp }; return; }
-    const hn = hitNode(n.x, n.y);
-    if (hn) { sel = { type:'node', node:hn }; showNodeForm(hn); drag = { kind:'node', node:hn }; return; }
-    const hs = hitSpline(n.x, n.y);
-    if (hs) { sel = { type:'spline', spline:hs }; hideNodeForm(); syncWidthUI(hs.width); return; }
-    sel = null; hideNodeForm();
-    pan = { sx, sy, ox: view.x, oy: view.y };   // empty drag = pan
-    return;
+    const hp = hitPoint(p.x, p.y);
+    if (hp) { sel = hp; hideNodeForm(); drag = { kind: 'point', ...hp }; syncWidthUI(hp.spline.width); updateActionBar(); return; }
+    const hn = hitNode(p.x, p.y);
+    if (hn) { sel = { type: 'node', node: hn }; showNodeForm(hn); drag = { kind: 'node', node: hn }; updateActionBar(); return; }
+    pan = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y };   // empty → pan (or tap to select/deselect)
   }
-
-  if (tool === 'spline') {
-    if (!draft) draft = { points: [], width: defaultWidth };
-    draft.points.push({ x: n.x, y: n.y });
-    return;
-  }
-
-  if (tool === 'node') {
-    const node = GW.loadWorld({ nodes:[{ x:n.x, y:n.y, label:'', access:'car', radius:60 }] }).nodes[0];
-    GW.computeSnap(world, node);
-    world.nodes.push(node);
-    sel = { type:'node', node }; showNodeForm(node); save();
-    return;
-  }
+  // road/node tools act on tap (pointerup)
 });
 
 cv.addEventListener('pointermove', (e) => {
-  const sx = e.clientX, sy = e.clientY - 52;
-  if (pan) { view.x = pan.ox + (sx - pan.sx); view.y = pan.oy + (sy - pan.sy); return; }
-  if (!drag) return;
-  const n = toNative(sx, sy);
-  if (drag.kind === 'point') {
-    drag.spline.points[drag.idx].x = n.x;
-    drag.spline.points[drag.idx].y = n.y;
-    GW.reflow(drag.spline);
-  } else if (drag.kind === 'node') {
-    drag.node.x = n.x; drag.node.y = n.y;
-    GW.computeSnap(world, drag.node);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (gesture) { updateGesture(); return; }
+  if (single && Math.hypot(e.clientX - single.x0, e.clientY - single.y0) > TAP_SLOP) single.moved = true;
+  if (drag) {
+    const p = toNative(e.clientX, e.clientY);
+    if (drag.kind === 'point') { drag.spline.points[drag.idx].x = p.x; drag.spline.points[drag.idx].y = p.y; GW.reflow(drag.spline); }
+    else if (drag.kind === 'node') { drag.node.x = p.x; drag.node.y = p.y; GW.computeSnap(world, drag.node); }
+    return;
   }
+  if (pan) { view.x = pan.ox + (e.clientX - pan.sx); view.y = pan.oy + (e.clientY - pan.sy); }
 });
 
-cv.addEventListener('pointerup', () => {
-  if (drag) save();
-  drag = null; pan = null;
-});
+function endPointer(e) {
+  const wasTap = single && !single.moved && !gesture && pointers.size === 1;
+  pointers.delete(e.pointerId);
+  try { cv.releasePointerCapture(e.pointerId); } catch (_) {}
+
+  if (gesture) {
+    if (pointers.size < 2) {
+      gesture = null;
+      if (pointers.size === 1) { const rp = [...pointers.values()][0]; pan = { sx: rp.x, sy: rp.y, ox: view.x, oy: view.y }; }
+    }
+    single = null; drag = null; return;
+  }
+  if (drag) { save(); updateActionBar(); }
+  else if (wasTap) handleTap(single.native, single.button);
+  drag = null; pan = null; single = null;
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('contextmenu', (e) => e.preventDefault());
-
 cv.addEventListener('dblclick', () => finishDraft());
 
 cv.addEventListener('wheel', (e) => {
   e.preventDefault();
-  const sx = e.clientX, sy = e.clientY - 52;
-  const before = toNative(sx, sy);
-  const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
-  view.zoom = Math.max(0.03, Math.min(8, view.zoom * factor));
-  // keep cursor anchored
-  view.x = sx - before.x * view.zoom;
-  view.y = sy - before.y * view.zoom;
+  const { sx, sy } = screenXY(e.clientX, e.clientY);
+  const before = { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom };
+  const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  view.zoom = Math.max(0.03, Math.min(8, view.zoom * f));
+  view.x = sx - before.x * view.zoom; view.y = sy - before.y * view.zoom;
 }, { passive: false });
 
-// ── keyboard ─────────────────────────────────────────────────
-window.addEventListener('keydown', (e) => {
-  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-  if (e.code === 'Space') { spaceDown = true; cv.style.cursor='grab'; e.preventDefault(); }
-  if (e.key === 'v' || e.key === 'V') setTool('select');
-  if (e.key === 's' || e.key === 'S') setTool('spline');
-  if (e.key === 'n' || e.key === 'N') setTool('node');
-  if (e.key === 'Enter') finishDraft();
-  if (e.key === 'Escape') { draft = null; sel = null; hideNodeForm(); }
-  if (e.key === '[' ) adjustWidth(-6);
-  if (e.key === ']' ) adjustWidth(6);
-  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
-});
-window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') { spaceDown = false; cv.style.cursor='crosshair'; }
-});
-
-function finishDraft() {
-  if (draft && draft.points.length >= 2) {
-    const sp = GW.loadWorld({ splines:[{ points:draft.points, width:draft.width }] }).splines[0];
-    world.splines.push(sp);
-    sel = { type:'spline', spline: sp };
-    save();
+function handleTap(nat, button) {
+  if (tool === 'spline') {
+    if (!draft) draft = { points: [], width: defaultWidth };
+    draft.points.push({ x: nat.x, y: nat.y }); updateActionBar();
+  } else if (tool === 'node') {
+    const node = GW.loadWorld({ nodes: [{ x: nat.x, y: nat.y, label: '', access: 'car', radius: 60 }] }).nodes[0];
+    GW.computeSnap(world, node); world.nodes.push(node);
+    sel = { type: 'node', node }; showNodeForm(node); save(); updateActionBar();
+  } else { // select: tap selects a road, or deselects
+    const hs = hitSpline(nat.x, nat.y);
+    if (hs) { sel = { type: 'spline', spline: hs }; syncWidthUI(hs.width); hideNodeForm(); }
+    else { sel = null; hideNodeForm(); }
+    updateActionBar();
   }
-  draft = null;
 }
 
-function deleteSelection() {
-  if (!sel) return;
-  if (sel.type === 'node') {
-    world.nodes = world.nodes.filter(n => n !== sel.node); hideNodeForm();
-  } else if (sel.type === 'point') {
-    const s = sel.spline;
-    if (s.points.length <= 2) { world.splines = world.splines.filter(x => x !== s); }
-    else { s.points.splice(sel.idx, 1); GW.reflow(s); }
-  } else if (sel.type === 'spline') {
-    world.splines = world.splines.filter(x => x !== sel.spline);
-  }
-  sel = null; save();
+// ── gestures ─────────────────────────────────────────────────
+function beginGesture() {
+  const pts = [...pointers.values()];
+  const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  const midx = (pts[0].x + pts[1].x) / 2, midy = (pts[0].y + pts[1].y) / 2;
+  const r = cv.getBoundingClientRect();
+  gesture = { d0: Math.max(1, d), z0: view.zoom,
+    anchor: { x: (midx - r.left - view.x) / view.zoom, y: (midy - r.top - view.y) / view.zoom } };
+}
+function updateGesture() {
+  const pts = [...pointers.values()]; if (pts.length < 2) return;
+  const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  const midx = (pts[0].x + pts[1].x) / 2, midy = (pts[0].y + pts[1].y) / 2;
+  const r = cv.getBoundingClientRect();
+  const zoom = Math.max(0.03, Math.min(8, gesture.z0 * (d / gesture.d0)));
+  view.zoom = zoom;
+  view.x = (midx - r.left) - gesture.anchor.x * zoom;
+  view.y = (midy - r.top) - gesture.anchor.y * zoom;
 }
 
-// ── tools & width UI ─────────────────────────────────────────
+// ── zoom buttons ─────────────────────────────────────────────
+function zoomBy(f) {
+  const cx = cv.width / 2, cy = cv.height / 2;
+  const before = { x: (cx - view.x) / view.zoom, y: (cy - view.y) / view.zoom };
+  view.zoom = Math.max(0.03, Math.min(8, view.zoom * f));
+  view.x = cx - before.x * view.zoom; view.y = cy - before.y * view.zoom;
+}
+document.getElementById('zIn').onclick = () => zoomBy(1.25);
+document.getElementById('zOut').onclick = () => zoomBy(1 / 1.25);
+document.getElementById('zFit').onclick = () => fitView();
+
+// ── tools ────────────────────────────────────────────────────
 function setTool(t) {
   tool = t;
-  document.getElementById('tSelect').classList.toggle('active', t==='select');
-  document.getElementById('tSpline').classList.toggle('active', t==='spline');
-  document.getElementById('tNode').classList.toggle('active', t==='node');
-  if (t !== 'spline') { /* keep draft until finished elsewhere */ }
-  cv.style.cursor = t==='select' ? 'default' : 'crosshair';
+  document.getElementById('tSelect').classList.toggle('active', t === 'select');
+  document.getElementById('tSpline').classList.toggle('active', t === 'spline');
+  document.getElementById('tNode').classList.toggle('active', t === 'node');
+  if (t !== 'node') hideNodeForm();
+  updateActionBar();
 }
 document.getElementById('tSelect').onclick = () => setTool('select');
 document.getElementById('tSpline').onclick = () => setTool('spline');
 document.getElementById('tNode').onclick   = () => setTool('node');
 
-const widthRange = document.getElementById('widthRange');
-const widthVal = document.getElementById('widthVal');
+function finishDraft() {
+  if (draft && draft.points.length >= 2) {
+    const sp = GW.loadWorld({ splines: [{ points: draft.points, width: draft.width }] }).splines[0];
+    world.splines.push(sp); sel = { type: 'spline', spline: sp }; save(); toast('Road added');
+  }
+  draft = null; updateActionBar();
+}
+function undoDraftPoint() {
+  if (draft && draft.points.length) { draft.points.pop(); if (!draft.points.length) draft = null; updateActionBar(); }
+}
+function deleteSelection() {
+  if (!sel) return;
+  if (sel.type === 'node') { world.nodes = world.nodes.filter(n => n !== sel.node); hideNodeForm(); }
+  else if (sel.type === 'point') {
+    const s = sel.spline;
+    if (s.points.length <= 2) world.splines = world.splines.filter(x => x !== s);
+    else { s.points.splice(sel.idx, 1); GW.reflow(s); }
+  } else if (sel.type === 'spline') world.splines = world.splines.filter(x => x !== sel.spline);
+  sel = null; save(); updateActionBar();
+}
+
+// ── bottom action bar (contextual) ───────────────────────────
+function updateActionBar() {
+  const box = document.getElementById('ctxBtns');
+  box.innerHTML = '';
+  const add = (label, cls, fn) => { const b = document.createElement('button'); b.className = 'abtn ' + (cls || ''); b.textContent = label; b.onclick = fn; box.appendChild(b); };
+  if (tool === 'spline' && draft && draft.points.length) {
+    add('↩ Undo point', '', undoDraftPoint);
+    if (draft.points.length >= 2) add('✓ Finish road', 'go', finishDraft);
+  } else if (sel && (sel.type === 'spline' || sel.type === 'point')) {
+    add('🗑 Delete road', 'danger', () => { sel = { type: 'spline', spline: sel.spline }; deleteSelection(); });
+  } else if (sel && sel.type === 'node') {
+    add('🗑 Delete node', 'danger', deleteSelection);
+  }
+  // width slider targets: selected/drawn road, else default
+  const s = selSpline() || (draft ? draft : null);
+  syncWidthUI(s ? s.width : defaultWidth);
+}
+const widthRange = document.getElementById('widthRange'), widthVal = document.getElementById('widthVal');
 widthRange.addEventListener('input', () => {
   const w = +widthRange.value; widthVal.textContent = w;
   const s = selSpline();
-  if (s) { s.width = w; save(); }
-  else if (draft) { draft.width = w; }
+  if (s) { s.width = w; GW.reflow(s); save(); }
+  else if (draft) draft.width = w;
   else defaultWidth = w;
 });
-function syncWidthUI(w) { widthRange.value = w; widthVal.textContent = Math.round(w); }
-function adjustWidth(d) {
-  const s = selSpline();
-  if (s) { s.width = Math.max(16, Math.min(400, s.width + d)); syncWidthUI(s.width); save(); }
-  else { defaultWidth = Math.max(16, Math.min(400, defaultWidth + d)); if (draft) draft.width = defaultWidth; syncWidthUI(defaultWidth); }
-}
-
-document.getElementById('opac').addEventListener('input', (e) => { overlayOpacity = +e.target.value/100; });
+function syncWidthUI(w) { widthRange.value = Math.round(w); widthVal.textContent = Math.round(w); }
 
 // ── node form ────────────────────────────────────────────────
 const nf = document.getElementById('nodeForm');
 let formNode = null;
 function showNodeForm(n) {
   formNode = n; nf.style.display = 'block';
-  document.getElementById('nfLabel').value = n.label || '';
-  document.getElementById('nfProvides').value = (n.provides||[]).join(', ');
-  document.getElementById('nfAccepts').value = (n.accepts||[]).join(', ');
-  document.getElementById('nfAccess').value = n.access || 'car';
-  document.getElementById('nfRadius').value = n.radius || 60;
+  nfLabel.value = n.label || ''; nfProvides.value = (n.provides || []).join(', ');
+  nfAccepts.value = (n.accepts || []).join(', '); nfAccess.value = n.access || 'car'; nfRadius.value = n.radius || 60;
 }
 function hideNodeForm() { nf.style.display = 'none'; formNode = null; }
 const parseList = (s) => s.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-document.getElementById('nfLabel').addEventListener('input', e => { if(formNode){formNode.label=e.target.value; save();}});
-document.getElementById('nfProvides').addEventListener('input', e => { if(formNode){formNode.provides=parseList(e.target.value); save();}});
-document.getElementById('nfAccepts').addEventListener('input', e => { if(formNode){formNode.accepts=parseList(e.target.value); save();}});
-document.getElementById('nfAccess').addEventListener('change', e => { if(formNode){formNode.access=e.target.value; save();}});
-document.getElementById('nfRadius').addEventListener('input', e => { if(formNode){formNode.radius=Math.max(10,+e.target.value||60); save();}});
-document.getElementById('nfDelete').addEventListener('click', () => {
-  if (formNode) { world.nodes = world.nodes.filter(n => n !== formNode); hideNodeForm(); sel=null; save(); }
-});
+const nfLabel = document.getElementById('nfLabel'), nfProvides = document.getElementById('nfProvides'),
+      nfAccepts = document.getElementById('nfAccepts'), nfAccess = document.getElementById('nfAccess'),
+      nfRadius = document.getElementById('nfRadius');
+nfLabel.oninput = e => { if (formNode) { formNode.label = e.target.value; save(); } };
+nfProvides.oninput = e => { if (formNode) { formNode.provides = parseList(e.target.value); save(); } };
+nfAccepts.oninput = e => { if (formNode) { formNode.accepts = parseList(e.target.value); save(); } };
+nfAccess.onchange = e => { if (formNode) { formNode.access = e.target.value; save(); } };
+nfRadius.oninput = e => { if (formNode) { formNode.radius = Math.max(10, +e.target.value || 60); save(); } };
+document.getElementById('nfClose').onclick = hideNodeForm;
+document.getElementById('nfDelete').onclick = () => { if (formNode) { world.nodes = world.nodes.filter(n => n !== formNode); hideNodeForm(); sel = null; save(); updateActionBar(); } };
 
 // ── export / import ──────────────────────────────────────────
-const io = document.getElementById('io');
-const ioText = document.getElementById('ioText');
-const ioLoad = document.getElementById('ioLoad');
+const io = document.getElementById('io'), ioText = document.getElementById('ioText'), ioLoad = document.getElementById('ioLoad');
 function openIO(mode) {
   io.style.display = 'flex';
-  document.getElementById('ioTitle').textContent = mode === 'export' ? 'Export — copy this JSON and send it over' : 'Import — paste world JSON, then Load';
+  document.getElementById('ioTitle').textContent = mode === 'export' ? 'Export — copy or download, then send it over' : 'Import — paste JSON, then Load';
   ioLoad.style.display = mode === 'import' ? 'inline-block' : 'none';
-  if (mode === 'export') { ioText.value = GW.serialize(world); ioText.readOnly = false; ioText.select?.(); }
-  else { ioText.value = ''; ioText.readOnly = false; ioText.focus(); }
+  if (mode === 'export') { ioText.value = GW.serialize(world); }
+  else { ioText.value = ''; ioText.focus(); }
 }
 document.getElementById('btnExport').onclick = () => openIO('export');
 document.getElementById('btnImport').onclick = () => openIO('import');
-document.getElementById('ioClose').onclick = () => io.style.display='none';
-document.getElementById('ioCopy').onclick = () => { ioText.select(); navigator.clipboard.writeText(ioText.value).then(()=>toast('Copied JSON')); };
+document.getElementById('ioClose').onclick = () => io.style.display = 'none';
+document.getElementById('ioCopy').onclick = () => { ioText.select(); navigator.clipboard.writeText(ioText.value).then(() => toast('Copied JSON'), () => toast('Copy failed — select & copy manually')); };
 document.getElementById('ioDownload').onclick = () => {
-  const blob = new Blob([ioText.value || GW.serialize(world)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = (world.mapId||'map') + '.world.json'; a.click();
-  URL.revokeObjectURL(a.href);
+  const blob = new Blob([ioText.value || GW.serialize(world)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = (world.mapId || 'map') + '.world.json'; a.click(); URL.revokeObjectURL(a.href);
 };
 ioLoad.onclick = () => {
-  try {
-    const w = GW.loadWorld(ioText.value);
-    w.mapId = world.mapId;
-    world = w; save(); io.style.display='none'; toast('Imported ' + world.splines.length + ' roads, ' + world.nodes.length + ' nodes');
-  } catch (e) { toast('Invalid JSON: ' + e.message); }
+  try { const w = GW.loadWorld(ioText.value); w.mapId = world.mapId; world = w; save(); io.style.display = 'none';
+    updateActionBar(); toast(`Imported ${world.splines.length} roads, ${world.nodes.length} nodes`); }
+  catch (e) { toast('Invalid JSON: ' + e.message); }
 };
-
 document.getElementById('btnClear').onclick = () => {
-  if (!confirm('Clear all roads & nodes for this map? (your export is unaffected)')) return;
+  if (!confirm('Clear all roads & nodes for this map?')) return;
   localStorage.removeItem('gw_world_' + world.mapId);
   world = GW.emptyWorld(world.mapId, world.imageSize);
-  sel = null; draft = null; hideNodeForm(); toast('Cleared');
+  sel = null; draft = null; hideNodeForm(); updateActionBar(); toast('Cleared');
 };
 
-// ── toast ────────────────────────────────────────────────────
+// ── keyboard (desktop) ───────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  if (e.key === 'v' || e.key === 'V') setTool('select');
+  if (e.key === 's' || e.key === 'S') setTool('spline');
+  if (e.key === 'n' || e.key === 'N') setTool('node');
+  if (e.key === 'Enter') finishDraft();
+  if (e.key === 'Escape') { draft = null; sel = null; hideNodeForm(); updateActionBar(); }
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+  if (e.key === '[') { zoomBy(1 / 1.15); }
+  if (e.key === ']') { zoomBy(1.15); }
+});
+
+// ── toast + hint ─────────────────────────────────────────────
 let toastT = null;
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900);
-}
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900); }
+let hintFaded = false;
+function fadeHint() { if (hintFaded) return; hintFaded = true; const h = document.getElementById('hint'); h.style.opacity = '0'; setTimeout(() => h.remove(), 500); }
+setTimeout(fadeHint, 6000);
 
 // ── boot ─────────────────────────────────────────────────────
 buildMapSelect();
 resize();
 loadMap('city');
+updateActionBar();
 requestAnimationFrame(draw);
 </script>
 </body>
