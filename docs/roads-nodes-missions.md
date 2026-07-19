@@ -120,6 +120,7 @@ This is the heart of the doc — the format you'll export and I'll bake.
 ```json
 {
   "id": "nd_hospital",
+  "kind": "stop",
   "x": 980, "y": 1240,
   "label": "Hospital",
   "provides": ["bandaids"],
@@ -130,6 +131,15 @@ This is the heart of the doc — the format you'll export and I'll bake.
 }
 ```
 
+An **intersection** node is the same array, `kind: "intersection"` (rendered
+pink), carrying only geometry — it marks a junction where roads connect for the
+autopilot graph:
+
+```json
+{ "id": "nd_x1", "kind": "intersection", "x": 2694, "y": 1520, "radius": 110 }
+```
+
+- `kind` — `"stop"` (delivery, green) or `"intersection"` (junction, pink).
 - `x,y` — node center, image-native px.
 - `label` — free text you type in the editor ("Hospital", "Pizza Place").
 - `provides` — item types this node can be the **source** of (lowercased

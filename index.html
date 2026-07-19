@@ -1029,11 +1029,12 @@ function drawWorldOverlay() {
     ctx.stroke();
   }
   for (const nd of worldData.nodes) {
+    const isX = nd.kind === 'intersection';
     ctx.beginPath();
     ctx.arc(nd.x * s - carX, nd.y * s - carY, nd.radius * s, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(34,197,94,0.20)';
+    ctx.fillStyle = isX ? 'rgba(255,79,163,0.20)' : 'rgba(34,197,94,0.20)';
     ctx.fill();
-    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = isX ? '#ff4fa3' : '#22c55e'; ctx.lineWidth = 2; ctx.stroke();
   }
 }
 

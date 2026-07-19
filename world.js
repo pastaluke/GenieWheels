@@ -124,11 +124,12 @@
   function normNode(n) {
     return {
       id: n.id || uid('nd'),
+      kind: n.kind === 'intersection' ? 'intersection' : 'stop', // 'stop' (delivery) | 'intersection'
       x: +n.x, y: +n.y,
       label: n.label || '',
       provides: Array.isArray(n.provides) ? n.provides.slice() : [],
       accepts: Array.isArray(n.accepts) ? n.accepts.slice() : [],
-      radius: +n.radius || 60,
+      radius: +n.radius || (n.kind === 'intersection' ? 110 : 60),
       access: n.access || 'car',        // 'car' | 'foot' | 'any'
       snap: n.snap || null,
     };
@@ -175,16 +176,11 @@
         closed: s.closed,
         oneway: s.oneway,
       })),
-      nodes: world.nodes.map((n) => ({
-        id: n.id,
-        x: round(n.x), y: round(n.y),
-        label: n.label,
-        provides: n.provides,
-        accepts: n.accepts,
-        radius: round(n.radius),
-        access: n.access,
-        snap: n.snap || null,
-      })),
+      nodes: world.nodes.map((n) => n.kind === 'intersection'
+        ? { id: n.id, kind: 'intersection', x: round(n.x), y: round(n.y), radius: round(n.radius) }
+        : { id: n.id, kind: 'stop', x: round(n.x), y: round(n.y), label: n.label,
+            provides: n.provides, accepts: n.accepts, radius: round(n.radius),
+            access: n.access, snap: n.snap || null }),
       items: world.items || [],
     };
     return JSON.stringify(out, null, 2);
